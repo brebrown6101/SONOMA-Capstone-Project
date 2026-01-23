@@ -8,7 +8,7 @@
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_raw.csv)
 data_path = ""
 
-# Put your path to the SONOMA csv here 
+# Put your path to where you want to save the cleaned data 
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_cleaned.csv)
 ouptut_path = ""
 
