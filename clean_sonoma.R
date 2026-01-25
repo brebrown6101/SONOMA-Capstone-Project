@@ -168,9 +168,69 @@ clean_s <- clean_s %>%
       ageoutcomes >= 75  ~ "75+"
   ))
 
-#Relocates new columns to front
+
+##abnormal vitals
+#create a binary text indicator for abnormal vitals (Fever, Tachycardia, Hypotension)
 clean_s <- clean_s %>%
-  relocate(record_id, Race, Sex, Ethnicity, ESL, primary_language, Age_Categories)
+  mutate(
+    abnormal_vital_indicator = if_any(
+      c(
+        abnormal_vitalsoutcomes___1, # Fever: Temp > 38 C 
+        abnormal_vitalsoutcomes___2, # Tachycardia: HR > 100 bpm 
+        abnormal_vitalsoutcomes___3, # Hypotension: SBP < 90 / DBP < 60 
+        abnormal_vitalsoutcomes___4, # Tachypnea: RR > 20 bpm 
+        abnormal_vitalsoutcomes___5  # Bradycardia: HR < 50 bpm 
+      ),
+      ~ .x == 1
+    ),
+    abnormal_vital_indicator = if_else(abnormal_vital_indicator, "Yes", "No", missing = "No")
+  )
+
+##Imaging Centered
+#consolidate imaging findings from both CT and Ultrasound into patient-level text indicators
+clean_s <- clean_s %>%
+  mutate(
+    # Phlegmon (Inflammatory Mass) 
+    # Merge findings: 1=Yes is positive; 0=No/2=Not Mentioned are negative 
+    phlegmon_combined = case_when(
+      phlegmonoutcomes == 1 | us_phlegoutcomes == 1 ~ "Yes",
+      phlegmonoutcomes %in% c(0, 2) & (us_phlegoutcomes %in% c(0, 2) | is.na(us_phlegoutcomes)) ~ "No",
+      phlegmonoutcomes == 3 | us_phlegoutcomes == 3 ~ NA_character_, # Mark "Ambiguous" as NA
+      TRUE ~ "No"
+    ),
+    
+    #  Perforation
+    # Merge findings: 1=Yes/2=Micro-perf are positive; 0=No/3=Not Mentioned are negative 
+    perf_combined = case_when(
+      perfoutcomes %in% c(1, 2) | us_perfoutcomes == 1 ~ "Yes",
+      perfoutcomes %in% c(0, 3) & (us_perfoutcomes %in% c(0, 2) | is.na(us_perfoutcomes)) ~ "No",
+      perfoutcomes == 4 | us_perfoutcomes == 3 ~ NA_character_, 
+      TRUE ~ "No"
+    ),
+    
+    #Abscess
+    # Merge findings: 1=Yes is positive; 0=No/2=Not Mentioned are negative 
+    abscess_combined = case_when(
+      abscessoutcomes == 1 | us_abscoutcomes == 1 ~ "Yes",
+      abscessoutcomes %in% c(0, 2) & (us_abscoutcomes %in% c(0, 2) | is.na(us_abscoutcomes)) ~ "No",
+      abscessoutcomes == 3 | us_abscoutcomes == 3 ~ NA_character_, 
+      TRUE ~ "No"
+    )
+  )
+
+###Relocates new columns to front
+clean_s <- clean_s %>%
+  relocate(record_id, 
+           Race, Sex, 
+           Ethnicity, 
+           ESL, 
+           primary_language, 
+           Age_Categories,
+           abnormal_vital_indicator,        
+           phlegmon_combined,               
+           perf_combined,                 
+           abscess_combined
+           )
 
 #### SAVE ####
 
