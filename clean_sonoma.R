@@ -123,7 +123,7 @@ clean_s <- clean_s %>%
       #White or Other/Unspecified → use Hispanic value (Can change this distinction)
       Race == "White" & Ethnicity == "Hispanic/Latino/Spanish Origin" ~ "Hispanic/Latino/Spanish Origin",
       Race == "Other/Not Specified" & Ethnicity == "Hispanic/Latino/Spanish Origin" ~ "Hispanic/Latino/Spanish Origin",
-      
+      Race == "White" & Ethnicity != "Hispanic/Latino/Spanish Origin" ~ "Non-Hispanic White",
       #Any non‑white race AND Hispanic → Multiracial
       Ethnicity == "Hispanic/Latino/Spanish Origin"  ~ "Multiracial",
       
@@ -131,6 +131,18 @@ clean_s <- clean_s %>%
       TRUE ~ Race
     )
   )
+
+clean_s <- clean_s %>%
+  mutate(
+    RaceEthnicity = case_when( #condensing races that had <30 participants into Other/Not Specified
+      Race == "AI/AN" | Race == "Asian Indian" | Race == "NHPI" ~ "Other/Not Specified",
+      #all other race distinctions stay the same
+      TRUE ~ RaceEthnicity
+    )
+  )
+      
+      
+
 
 
 #Indicator of ESL (Yes = ESL, No = Eng First Lang)

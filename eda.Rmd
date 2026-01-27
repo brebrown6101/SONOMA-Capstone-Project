@@ -32,6 +32,22 @@ According to codebook:
 -   WBC or NLR, continuous | `wbcoutcomes`, `nlroutcomes`
 
 ```{r}
+
+#table showing counts of eligible patients that received appendectomy (1) vs NOM (2)
+table(clean_s$initial_planoutcomes)
+#about 23% of eligible participants chose NOM
+
+#table of NOM vs Appy by RaceEthnicity
+table(clean_s$initial_planoutcomes, clean_s$RaceEthnicity)
+
+#table of NOM vs Appy by Sex
+table(clean_s$initial_planoutcomes, clean_s$Sex) #pretty even
+
+#table of NOM vs Appy by Age
+table(clean_s$initial_planoutcomes, clean_s$Age_Categories)
+
+
+
 vars <- c("Age_Categories", "Sex", "Ethnicity", "appendicolithoutcomes", "ccioutcomes", "RaceEthnicity")
 
 for (var in vars){
