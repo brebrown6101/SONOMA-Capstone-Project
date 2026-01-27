@@ -32,7 +32,7 @@ According to codebook:
 -   WBC or NLR, continuous | `wbcoutcomes`, `nlroutcomes`
 
 ```{r}
-vars <- c("Age_Categories", "Sex", "Ethnicity", "appendicolithoutcomes", "ccioutcomes")
+vars <- c("Age_Categories", "Sex", "Ethnicity", "appendicolithoutcomes", "ccioutcomes", "RaceEthnicity")
 
 for (var in vars){
 x <- clean_s[[var]]
@@ -45,6 +45,21 @@ lab <- paste0("Counts/frequency: ",
 
 barplot(tab, main = var, sub = lab, las = 2)
 }
+
+#table of counts of Race/Ethnicity
+table(clean_s$RaceEthnicity)
+#RESULTS: less than 30 in AI/AN, Asian Indian, and NHPI. Will need to collapse these columns -> probably just add to other/not specified
+
+#table of counts of age ranges
+table(clean_s$Age_Categories)
+# RESULTS: all categories have >30 individuals, though unbalanced as 65-74 and 75+ are way lower than other categories. Should we put them together?
+
+#table of counts of ESL
+table(clean_s$ESL)
+table(clean_s$primary_language)
+#RESULT: would be more balanced if we used ESL indicator, but worth noting in results that majority of "Other" were spanish speakers. 
+
+
 
 ```
 ```{r}

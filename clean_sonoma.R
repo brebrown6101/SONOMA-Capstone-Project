@@ -7,12 +7,12 @@
 # Put your path to the SONOMA csv here 
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_raw.csv)
 #Bre: "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim0.csv"
-data_path = 
+data_path = "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim0.csv"
 
 # Put your path to where you want to save the cleaned data 
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_cleaned.csv)
 #Bre: "C:/Bre/SONOMA/Sonoma_cleaned.csv"
-output_path = 
+output_path = "C:/Bre/SONOMA/Sonoma_cleaned.csv"
 
 
 
@@ -33,7 +33,7 @@ eligible <- df %>% filter(eligiblefull == 1)
 #Race Condensing
 clean_s <- eligible %>%
   mutate(
-    race_ct = select(
+    race_ct = select( #creates variable called race_ct that sums up row counts for each race outcome
       .,
       raceoutcomes___1,
       raceoutcomes___2,
@@ -62,7 +62,7 @@ clean_s <- eligible %>%
         raceoutcomes___6 |
         raceoutcomes___7 |
         raceoutcomes___8 |
-        raceoutcomes___9 | raceoutcomes___10 == 1 ~ "Asian",
+        raceoutcomes___9 | raceoutcomes___10 == 1 ~ "Asian", 
       raceoutcomes___11 |
         raceoutcomes___12 |
         raceoutcomes___13 | raceoutcomes___14 ==  1 ~ "NHPI", #Native Hawaiian or Pacific Islander
@@ -114,13 +114,32 @@ clean_s <- clean_s %>%
     )
   ) %>% select(-ethnicityoutcomes) #removes original ethnicityoutcomes
 
+
+#Combining Race and Ethnicity - EDA showed trend of individuals putting "other" for race but checking hispanic, leading to overinflated Other/unspecified for Race variable
+
+clean_s <- clean_s %>%
+  mutate(
+    RaceEthnicity = case_when(
+      #White or Other/Unspecified → use Hispanic value (Can change this distinction)
+      Race == "White" & Ethnicity == "Hispanic/Latino/Spanish Origin" ~ "Hispanic/Latino/Spanish Origin",
+      Race == "Other/Not Specified" & Ethnicity == "Hispanic/Latino/Spanish Origin" ~ "Hispanic/Latino/Spanish Origin",
+      
+      #Any non‑white race AND Hispanic → Multiracial
+      Ethnicity == "Hispanic/Latino/Spanish Origin"  ~ "Multiracial",
+      
+      #Otherwise keep race
+      TRUE ~ Race
+    )
+  )
+
+
 #Indicator of ESL (Yes = ESL, No = Eng First Lang)
 clean_s <- clean_s %>%
   mutate(
     ESL = case_when(
       esloutcomes == 0 ~ "No",
-      esloutcomes == 1 |
-        esloutcomes == 2 |
+      esloutcomes == 1 | #any other language as first lang. means ESL -> yes
+        esloutcomes == 2 | 
         esloutcomes == 3 |
         esloutcomes == 4 |
         esloutcomes == 5 |
@@ -136,7 +155,7 @@ clean_s <- clean_s %>%
     primary_language = case_when(
       esloutcomes == 0 ~ "English",
       esloutcomes == 1 ~ "Spanish",
-      esloutcomes == 2 |
+      esloutcomes == 2 |  #all other languages are categorized as other
         esloutcomes == 3 |
         esloutcomes == 4 |
         esloutcomes == 5 |
@@ -223,6 +242,7 @@ clean_s <- clean_s %>%
   relocate(record_id, 
            Race, Sex, 
            Ethnicity, 
+           RaceEthnicity,
            ESL, 
            primary_language, 
            Age_Categories,
