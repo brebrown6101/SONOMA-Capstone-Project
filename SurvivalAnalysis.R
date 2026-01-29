@@ -52,27 +52,40 @@ NOM_patients$status <- ifelse(
   NOM_patients$interval_typeoutcomes
 )
 
+
+
 NOM_patients$status <- as.numeric(NOM_patients$status)
 
-#Creating censoring date as 01/01/2026
-censor_date <- as.Date("2026-01-01")
 
 
-#creating time_to_event variable which includes censored time
+#creating time_to_event for all NOM patients, making it 365 for censored individuals
 NOM_patients$time_to_event <- ifelse(
   is.na(NOM_patients$time_to_appy),
-  as.numeric(censor_date - NOM_patients$time_of_dxoutcomes),
+  365,
   NOM_patients$time_to_appy
 )
+#administratively censoring those beyond 1 year
+NOM_patients$status365 <- ifelse(
+  NOM_patients$time_to_event > 365, 
+  0, #administratively censored beyond 1 year
+  NOM_patients$status
+)
 
+#changing time to event to 365 days for censored beyond 1 year individuals
+NOM_patients$time_to_event <- ifelse(
+  NOM_patients$status365 == 0, 
+  365, 
+  NOM_patients$time_to_event
+)
 
+NOM_patients$status <- factor(NOM_patients$status, 0:2, c("None", "Elective", "Urgent/Emergent"))
 
 #time until recurrence of appendicitis symptoms after NOM
 
 # #aalen-johansen estimator
 
 library(mstate)
-NOM_patients$event <- factor(NOM_patients$status, 0:2, c("censored", "Elective", "Urgent/Emergent"))
+NOM_patients$event <- factor(NOM_patients$status365, 0:2, c("Censored", "Elective", "Urgent/Emergent"))
 fit <- survfit(Surv(time_to_event, event) ~1, data = NOM_patients)
 fit$transitions
 plot(fit, xmax = 900, col = 1:2, lwd = 2,
