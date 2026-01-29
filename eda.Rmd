@@ -107,6 +107,22 @@ for (v in vars) {
 `nom_appyoutcomes`
 ```{r}
 # barplot(clean_s$nom_appyoutcomes)
+
+NOM_patients <- clean_s[clean_s$initial_planoutcomes == 2,] 
+
+NOM_patients <- NOM_patients[!is.na(NOM_patients$time_of_dxoutcomes),]
+
+#setting NA values to 0 for censored, creating status variable for survival
+NOM_patients$status <- ifelse(
+  is.na(NOM_patients$interval_typeoutcomes),
+  0,   # censored
+  NOM_patients$interval_typeoutcomes
+)
+
+table(NOM_patients$status)
+#Post NOM, 41 received elective appendectomy, 85 received Urgent/Emergent appendectomy, and 246 received neither.
+
+
 x <- clean_s[["nom_appyoutcomes"]]
 
 tab <- table(x, useNA = "ifany")
