@@ -6,49 +6,27 @@ library(dplyr)
 library(lubridate)
 
 
-
-
-
 data_path = "C:/Bre/SONOMA/Sonoma_cleaned.csv"
 
 clean_s = read.csv(data_path, check.names = FALSE, row.names=1) 
 
-# colnames(clean_s)
-
-
 #subsetting data to just NOM patients
 NOM_patients <- clean_s[clean_s$initial_planoutcomes == 2,] 
+NOM_patients$time_of_dxoutcomes
 
-
-#POTENTIALLY NEEDED VARIABLES
-
-# NOM_patients$time_of_dxoutcomes #date/time of  patients dx of appendicitis
-# NOM_patients$nom_appyoutcomes #indicator if patient received appendectomy afterNOM yes(1), no (0)
-# NOM_patients$interval_typeoutcomes #indicator of elective (1) or urgent/emergent (2) appy after NOM
-# NOM_patients$ed_return_365outcomes #indicator if patient returned to ED w/ appendicitis symptoms yes(1) no(0)
-# NOM_patients$ed_ret_dateoutcomes #date of first return to ED w/ appendicitis symptoms
-
-
-
-
-#time until recurrence of appendicitis symptoms after NOM
-
-
-NOM_patients <- NOM_patients[!is.na(NOM_patients$time_of_dxoutcomes),]
+NOM_patients <- NOM_patients[!is.na(NOM_patients$time_of_dxoutcomes),] #removing NA values for date/time of patients dx of appendicitis
 sum(is.na(NOM_patients$time_of_dxoutcomes)) #looking for NAs
 NOM_patients$time_of_dxoutcomes <- gsub(" .*","", NOM_patients$time_of_dxoutcomes) #removing time part of date/time
-sum(is.na(NOM_patients$time_of_dxoutcomes)) #checking we have the same amount of NAs
-#converting date_index to date object
+sum(is.na(NOM_patients$time_of_dxoutcomes)) #checking for NAs again
 
+#converting date_index to date object
 NOM_patients$time_of_dxoutcomes <- as.Date(
   NOM_patients$time_of_dxoutcomes,
   format = "%m/%d/%Y"
 )
 
-class(NOM_patients$time_of_dxoutcomes)
 
-
-#converting date of appendectomy after NOM to date object, converting blanks as NAs
+#converting date of appendectomy after NOM to date object, converting blanks to NAs
 NOM_patients$appy_int_dateoutcomes[
   NOM_patients$appy_int_dateoutcomes == ""
 ] <- NA
@@ -58,8 +36,6 @@ NOM_patients$appy_int_dateoutcomes <- as.Date(
   format = "%m/%d/%Y"
 )
 
-class(NOM_patients$appy_int_dateoutcomes)
-
 
 #creating variable that is time in days from NOM decision to appy
 NOM_patients$time_to_appy <- NOM_patients$appy_int_dateoutcomes - NOM_patients$time_of_dxoutcomes
@@ -68,18 +44,8 @@ NOM_patients$time_to_appy <- NOM_patients$appy_int_dateoutcomes - NOM_patients$t
 #DONT NEED THIS IF WE GET NEW TIMES FOR TWO ERRORS
 NOM_patients <- NOM_patients[NOM_patients$time_to_appy > 0 | is.na(NOM_patients$time_to_appy), ] #DONT NEED THIS IF WE GET NEW TIMES
 
-#Creating censoring date as 01/01/2026
-censor_date <- as.Date("2026-01-01")
 
-#putting in time to censoring, creating time_to_event variable
-NOM_patients$time_to_event <- ifelse(
-  is.na(NOM_patients$time_to_appy),
-  as.numeric(censor_date - NOM_patients$time_of_dxoutcomes),
-  NOM_patients$time_to_appy
-)
-
-
-#setting NA values to 0 for censored
+#setting NA values to 0 for censored, creating status variable for survival
 NOM_patients$status <- ifelse(
   is.na(NOM_patients$interval_typeoutcomes),
   0,   # censored
@@ -87,6 +53,21 @@ NOM_patients$status <- ifelse(
 )
 
 NOM_patients$status <- as.numeric(NOM_patients$status)
+
+#Creating censoring date as 01/01/2026
+censor_date <- as.Date("2026-01-01")
+
+
+#creating time_to_event variable which includes censored time
+NOM_patients$time_to_event <- ifelse(
+  is.na(NOM_patients$time_to_appy),
+  as.numeric(censor_date - NOM_patients$time_of_dxoutcomes),
+  NOM_patients$time_to_appy
+)
+
+
+
+#time until recurrence of appendicitis symptoms after NOM
 
 # #aalen-johansen estimator
 
@@ -107,4 +88,14 @@ legend(8, .2, c("Elective", "Urgent/Emergent"), lty = 1, lwd = 2, col = 1:2, bty
 #            title = "Kaplan-Meier Survival Curve", xlab = "Time", ylab = "Survival Probability", palette = "lightblue")
 # 
 # na_fit <- survfit(dat_surv ~ 1, data = data, type = "aalen")
+
+
+
+#POTENTIALLY NEEDED VARIABLES
+
+# NOM_patients$time_of_dxoutcomes #date/time of  patients dx of appendicitis
+# NOM_patients$nom_appyoutcomes #indicator if patient received appendectomy afterNOM yes(1), no (0)
+# NOM_patients$interval_typeoutcomes #indicator of elective (1) or urgent/emergent (2) appy after NOM
+# NOM_patients$ed_return_365outcomes #indicator if patient returned to ED w/ appendicitis symptoms yes(1) no(0)
+# NOM_patients$ed_ret_dateoutcomes #date of first return to ED w/ appendicitis symptoms
 
