@@ -7,7 +7,7 @@
 # Put your path to the SONOMA csv here 
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_raw.csv)
 #Bre: "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim0.csv"
-data_path = "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim0.csv"
+data_path = "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim2.csv"
 
 # Put your path to where you want to save the cleaned data 
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_cleaned.csv)
@@ -20,6 +20,8 @@ output_path = "C:/Bre/SONOMA/Sonoma_cleaned.csv"
 #### LOAD ####
 df = read.csv(data_path) 
 library(dplyr)
+library(tidyverse)
+library(tidyr)
 
 
 
@@ -251,7 +253,7 @@ clean_s <- clean_s %>%
 
 ###Relocates new columns to front
 clean_s <- clean_s %>%
-  relocate(record_id, 
+  relocate(ï..ID, 
            Race, Sex, 
            Ethnicity, 
            RaceEthnicity,
@@ -263,6 +265,9 @@ clean_s <- clean_s %>%
            perf_combined,                 
            abscess_combined
            )
+
+clean_s <- clean_s %>%
+  rename(RecordID = ï..ID )
 
 #### SAVE ####
 
