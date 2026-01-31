@@ -1,0 +1,109 @@
+---
+title: "eda NOM"
+author: "AnkeLi"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r}
+data_path = 
+#"//biostat-fs2-s/users/jic034/Downloads/sonoma_cleaned.csv"
+# data_path = "C:/Bre/SONOMA/Sonoma_cleaned.csv"
+
+clean_s = read.csv(data_path, check.names = FALSE, row.names=1) 
+
+# colnames(clean_s)
+```
+
+
+```{r}
+library(ggplot2)
+
+# Checking if treatment selection (NOM vs Surgery) differs by Race or Age
+# Using Chi-square tests to see if these associations are just random noise
+race_test <- chisq.test(table(clean_s$RaceEthnicity, clean_s$initial_planoutcomes))
+print(race_test)
+
+age_test <- chisq.test(table(clean_s$Age_Categories, clean_s$initial_planoutcomes))
+print(age_test)
+
+res <- chisq.test(table(clean_s$RaceEthnicity, clean_s$initial_planoutcomes))
+round(res$residuals, 2) 
+# Note: Residuals > 2 or < -2 are the "red flags" for significant deviation
+```
+
+```{r}
+# Showing the percentage of NOM vs Surgery for each age group
+# This "fill" position makes it easy to compare the ratio rather than just counts
+ggplot(clean_s, aes(x = Age_Categories, fill = as.factor(initial_planoutcomes))) +
+  geom_bar(position = "fill") + 
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Treatment Selection Ratio by Age Group", 
+       y = "Percentage (%)", 
+       fill = "Plan (1:Appy, 2:NOM)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+# Visualizing the proportion of treatment by Race
+ggplot(clean_s, aes(x = RaceEthnicity, fill = as.factor(initial_planoutcomes))) +
+  geom_bar(position = "fill") +
+  coord_flip() + # Flipping it makes those long race names easier to read
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "NOM vs Surgery Ratio by Race",
+       x = "Race/Ethnicity", y = "Percentage (%)", 
+       fill = "Plan (1:Appy, 2:NOM)") +
+  theme_minimal()
+
+# plotting those residuals we calculated earlier
+res_df <- as.data.frame(res$residuals)
+colnames(res_df) <- c("Race", "Treatment", "Residual")
+
+ggplot(res_df, aes(x = Race, y = Residual, fill = Treatment)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_hline(yintercept = c(-2, 2), linetype = "dashed", color = "red") + # The +/- 2 threshold
+  coord_flip() +
+  labs(title = "Where the Selection Bias Is: Residuals by Race",
+       subtitle = "Bars crossing the red lines are statistically significant",
+       y = "Standardized Residuals", x = "") +
+  scale_fill_discrete(labels = c("1: Appendectomy", "2: NOM")) +
+  theme_minimal()
+
+```
+
+```{r}
+# Prepping the labels to be "Yes/No" or "NOM/Appy" 
+clean_s$initial_plan_factor <- factor(clean_s$initial_planoutcomes, 
+                                     levels = c(1, 2), 
+                                     labels = c("Appendectomy", "NOM"))
+
+#Plot the proportion of two treatments by Charlson Comorbidity Index (CCI)
+p_cci <- ggplot(clean_s, aes(x = as.factor(round(as.numeric(ccioutcomes))), fill = initial_plan_factor)) +
+  geom_bar(position = "fill") + 
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Treatment Selection by Comorbidity (Cleaned CCI)", 
+       x = "Charlson Comorbidity Index (Rounded to nearest integer)", 
+       y = "Proportion (%)", 
+       fill = "Treatment") +
+  theme_minimal()
+
+print(p_cci)
+
+
+# Fecalith (Appendicolith) analysis
+clean_s$lith_factor <- factor(clean_s$appendicolithoutcomes, 
+                              levels = c(1, 0, 2), 
+                              labels = c("Yes", "No", "Not Mentioned"))
+
+p_lith <- ggplot(clean_s, aes(x = lith_factor, fill = initial_plan_factor)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Fecalith Impact on Selection", 
+       x = "Appendicolith Present?", y = "Proportion", fill = "Treatment") +
+  theme_minimal()
+
+
+print(p_lith)
+
+```
