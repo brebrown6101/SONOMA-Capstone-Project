@@ -124,45 +124,4 @@ barplot(tab, main = var, sub = lab, las = 2)
 
 ```
 # EDA for NOM Patients
-```{r}
-library(gmodels)
-NOM_patients <- clean_s[clean_s$initial_planoutcomes == 2,] 
 
-NOM_patients <- NOM_patients[!is.na(NOM_patients$time_of_dxoutcomes),]
-
-#setting NA values to 0 for censored, creating status variable for survival
-NOM_patients$status <- ifelse(
-  is.na(NOM_patients$interval_typeoutcomes),
-  0,   # censored
-  NOM_patients$interval_typeoutcomes
-)
-
-table(NOM_patients$status)
-#Post NOM, 41 received elective appendectomy, 89 received Urgent/Emergent appendectomy, and 251 received neither. Do we want to adjust this so its only people who received appy after 1 year?
-
-#Crosstable of RaceEthnicity by Status
-CrossTable(NOM_patients$RaceEthnicity, NOM_patients$status)
-#some groups like Asian, Multiracial, etc. only have 1 or 0 patients in certain outcome groups
-
-#Crosstabulation of abnormal vital indicator by status
-CrossTable(NOM_patients$abnormal_vital_indicator, NOM_patients$status)
-
-#Crosstabulation of appendicolith and status
-CrossTable(NOM_patients$appendicolithoutcomes, NOM_patients$status)
-
-
-
-library(nnet) #testing to see if there is any association b/w status and appendicolith
-#multi_mo <- multinom(status ~ appendicolithoutcomes, data = NOM_patients ,model=TRUE)
-#summary(multi_mo)
-#z <- summary(multi_mo)$coefficients/summary(multi_mo)$standard.errors
-#z
-#p <- (1 - pnorm(abs(z), 0, 1)) * 2
-#p
-
-
-#check for multicollinearity b/w variables?
-#check for linear relationship b/w continuous variables and log-odds of outcome?
-#potentially check for outliers of continuous variables?
-
-```

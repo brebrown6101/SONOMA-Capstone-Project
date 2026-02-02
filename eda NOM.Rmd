@@ -8,7 +8,7 @@ output: html_document
 ```{r}
 data_path = 
 #"//biostat-fs2-s/users/jic034/Downloads/sonoma_cleaned.csv"
-# data_path = "C:/Bre/SONOMA/Sonoma_cleaned.csv"
+"C:/Bre/SONOMA/Sonoma_cleaned.csv"
 
 clean_s = read.csv(data_path, check.names = FALSE, row.names=1) 
 
@@ -79,7 +79,7 @@ clean_s$initial_plan_factor <- factor(clean_s$initial_planoutcomes,
                                      labels = c("Appendectomy", "NOM"))
 
 #Plot the proportion of two treatments by Charlson Comorbidity Index (CCI)
-p_cci <- ggplot(clean_s, aes(x = as.factor(round(as.numeric(ccioutcomes))), fill = initial_plan_factor)) +
+p_cci <- ggplot(clean_s, aes((x = ccioutcomes), fill = initial_plan_factor)) +
   geom_bar(position = "fill") + 
   scale_y_continuous(labels = scales::percent) +
   labs(title = "Treatment Selection by Comorbidity (Cleaned CCI)", 

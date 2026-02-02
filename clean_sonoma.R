@@ -182,7 +182,6 @@ clean_s <- clean_s %>%
 #Removing site abstractor as we don't need it for analysis
 clean_s <- clean_s %>%
   select(
-    -sitesite_abstractor,
     -atrium_site_specificsite_abstractor,
     -uw_site_specificsite_abstractor,
     -uth_lbj_subsite
@@ -251,6 +250,18 @@ clean_s <- clean_s %>%
     )
   )
 
+
+#CCI to be up to 8, then greater than 8
+clean_s$ccioutcomes <- round(as.numeric(clean_s$ccioutcomes))
+
+clean_s$ccioutcomes <- ifelse(
+  clean_s$ccioutcomes >= 8,
+  ">= 8",   # censored
+  clean_s$ccioutcomes
+)
+
+
+
 ###Relocates new columns to front
 clean_s <- clean_s %>%
   relocate(ï..ID, 
@@ -265,6 +276,10 @@ clean_s <- clean_s %>%
            perf_combined,                 
            abscess_combined
            )
+
+
+
+
 
 clean_s <- clean_s %>%
   rename(RecordID = ï..ID )
