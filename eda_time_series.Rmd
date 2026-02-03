@@ -1,0 +1,62 @@
+```{r}
+library(ggplot2)
+library(dplyr)
+
+site_indicators <- c(
+  "1" = "Atrium", 
+  '2' = "Boston University", 
+  '3' = "Columbia", 
+  '4' = "Grady", 
+  '5' = "UT Health & LBJ", 
+  '6' = "Michigan", 
+  '7' = "Northwestern", 
+  '8' = "Iowa", 
+  '9' = "University of Washington",
+  '10' = "Medical University of South Carolina",
+  '11' = "Kaiser Permanente")
+
+start_dates = read.csv("//biostat-fs2-s/users/sherold/Documents/SONOMA-Data/TRIADPhase2_Site_Start_Date_V5_20231215.csv")
+start_dates = start_dates %>% select(-site_num)
+```
+
+
+```{r}
+data = read.csv("//biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_cleaned.csv")
+data$firstdxoutcomes = as.POSIXct(data$firstdxoutcomes)
+data$initial_planoutcomes = data$initial_planoutcomes - 1
+data$choice = factor(data$initial_planoutcomes, levels = c(0,1), labels = c("Surgery", "NOM"))
+data <- data %>%
+  filter(!is.na(choice))
+data = data %>% 
+  mutate(
+    site_name = case_when(sitesite_abstractor == 9 & uw_site_specificsite_abstractor == 1 ~ "Harborview Medical Center",
+                             sitesite_abstractor == 9 & uw_site_specificsite_abstractor == 2 ~ "University of Washington-Montlake",
+                             sitesite_abstractor == 9 & uw_site_specificsite_abstractor == 3 ~ "Northwest Hospital-University of Washington",
+                             sitesite_abstractor == 1 & atrium_site_specificsite_abstractor == 1 ~ "Atrium Health",
+                             sitesite_abstractor == 1 & atrium_site_specificsite_abstractor == 2 ~ "Atrium Health",
+                             sitesite_abstractor == 5 & uth_lbj_subsite == 1 ~ "Lyndon B Johnson Hospital",
+                             sitesite_abstractor == 5 & uth_lbj_subsite == 2 ~ "UT Health Science Center",
+                             sitesite_abstractor == 2 ~ "Boston Medical Center",
+                             sitesite_abstractor == 3 ~ "Columbia University Medical Center",
+                             sitesite_abstractor == 4 ~ "Grady Health System",
+                             sitesite_abstractor == 6 ~ "Michigan Medicine",
+                             sitesite_abstractor == 7 ~ "Northwestern Medicine",
+                             sitesite_abstractor == 8 ~ "University of Iowa Hospital and Clinics",
+                             sitesite_abstractor == 10 ~ "Medical University of South Carolina",
+                             sitesite_abstractor == 11 ~ "Kaiser Permanente"))
+
+
+data = merge(x = data, y = start_dates, by = "site_name", all.x = TRUE)
+data$start_date = as.POSIXct(data$start_date)
+```
+
+```{r}
+ggplot(data = data, aes(x = firstdxoutcomes, y = choice)) + 
+  geom_point(alpha = .25, size = 1) + 
+  geom_vline(aes(xintercept = start_date, color = "AppyOrNot")) +
+  facet_wrap(~site_name) +
+  labs(color = "") +
+    xlab("Date of Index") +
+  ylab("Choice at Index")
+```
+
