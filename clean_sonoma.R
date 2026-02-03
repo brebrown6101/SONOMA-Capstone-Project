@@ -179,13 +179,25 @@ clean_s <- clean_s %>%
     )
   ) %>% select(-esloutcomes,-esl_otheroutcomes)
 
-#Removing site abstractor as we don't need it for analysis
-clean_s <- clean_s %>%
-  select(
-    -atrium_site_specificsite_abstractor,
-    -uw_site_specificsite_abstractor,
-    -uth_lbj_subsite
-  )
+
+#Expand sub-sites (see codebook) and add site names
+clean_s = clean_s %>% 
+  mutate(
+    site_name = case_when(sitesite_abstractor == 9 & uw_site_specificsite_abstractor == 1 ~ "Harborview Medical Center",
+                          sitesite_abstractor == 9 & uw_site_specificsite_abstractor == 2 ~ "University of Washington-Montlake",
+                          sitesite_abstractor == 9 & uw_site_specificsite_abstractor == 3 ~ "Northwest Hospital-University of Washington",
+                          sitesite_abstractor == 1 & atrium_site_specificsite_abstractor == 1 ~ "Atrium Health",
+                          sitesite_abstractor == 1 & atrium_site_specificsite_abstractor == 2 ~ "Atrium Health",
+                          sitesite_abstractor == 5 & uth_lbj_subsite == 1 ~ "Lyndon B Johnson Hospital",
+                          sitesite_abstractor == 5 & uth_lbj_subsite == 2 ~ "UT Health Science Center",
+                          sitesite_abstractor == 2 ~ "Boston Medical Center",
+                          sitesite_abstractor == 3 ~ "Columbia University Medical Center",
+                          sitesite_abstractor == 4 ~ "Grady Health System",
+                          sitesite_abstractor == 6 ~ "Michigan Medicine",
+                          sitesite_abstractor == 7 ~ "Northwestern Medicine",
+                          sitesite_abstractor == 8 ~ "University of Iowa Hospital and Clinics",
+                          sitesite_abstractor == 10 ~ "Medical University of South Carolina",
+                          sitesite_abstractor == 11 ~ "Kaiser Permanente"))
 
 #Age Categories
 clean_s <- clean_s %>%
