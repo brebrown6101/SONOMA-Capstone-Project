@@ -7,7 +7,7 @@
 # Put your path to the SONOMA csv here 
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_raw.csv)
 #Bre: "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim0.csv"
-data_path = "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim0.csv"
+data_path = "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim2.csv"
 
 # Put your path to where you want to save the cleaned data 
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_cleaned.csv)
@@ -20,6 +20,8 @@ output_path = "C:/Bre/SONOMA/Sonoma_cleaned.csv"
 #### LOAD ####
 df = read.csv(data_path) 
 library(dplyr)
+library(tidyverse)
+library(tidyr)
 
 
 
@@ -180,7 +182,6 @@ clean_s <- clean_s %>%
 #Removing site abstractor as we don't need it for analysis
 clean_s <- clean_s %>%
   select(
-    -sitesite_abstractor,
     -atrium_site_specificsite_abstractor,
     -uw_site_specificsite_abstractor,
     -uth_lbj_subsite
@@ -249,9 +250,21 @@ clean_s <- clean_s %>%
     )
   )
 
+
+#CCI to be up to 8, then greater than 8
+clean_s$ccioutcomes <- round(as.numeric(clean_s$ccioutcomes))
+
+clean_s$ccioutcomes <- ifelse(
+  clean_s$ccioutcomes >= 8,
+  ">= 8",   # censored
+  clean_s$ccioutcomes
+)
+
+
+
 ###Relocates new columns to front
 clean_s <- clean_s %>%
-  relocate(record_id, 
+  relocate(ï..ID, 
            Race, Sex, 
            Ethnicity, 
            RaceEthnicity,
@@ -263,6 +276,13 @@ clean_s <- clean_s %>%
            perf_combined,                 
            abscess_combined
            )
+
+
+
+
+
+clean_s <- clean_s %>%
+  rename(RecordID = ï..ID )
 
 #### SAVE ####
 
