@@ -1,9 +1,8 @@
 ---
 title: "NOM Outcomes - EDA"
 output:
-  html_document:
-    df_print: paged
   pdf_document: default
+  html_document: default
 date: "2026-01-25"
 ---
 
