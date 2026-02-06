@@ -1,18 +1,28 @@
+---
+title: "Survival Analysis"
+output: html_document
+date: "2026-01-25"
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
 library(survival)
 library(survminer)
 library(survMisc)
 library(ggplot2)
 library(dplyr)
 library(lubridate)
+```
 
-
+#Data Set Up
+```{r}
 data_path = "C:/Bre/SONOMA/Sonoma_cleaned.csv"
 
 clean_s = read.csv(data_path, check.names = FALSE, row.names=1) 
 
 #subsetting data to just NOM patients
 NOM_patients <- clean_s[clean_s$initial_planoutcomes == 2,] 
-NOM_patients$time_of_dxoutcomes
 
 NOM_patients <- NOM_patients[!is.na(NOM_patients$time_of_dxoutcomes),] #removing NA values for date/time of patients dx of appendicitis
 sum(is.na(NOM_patients$time_of_dxoutcomes)) #looking for NAs
@@ -80,9 +90,11 @@ NOM_patients$time_to_event <- ifelse(
 
 NOM_patients$status <- factor(NOM_patients$status, 0:2, c("None", "Elective", "Urgent/Emergent"))
 
-#time until recurrence of appendicitis symptoms after NOM
+```
 
-# #aalen-johansen estimator
+## Aalen Johansen Estimator of competing risk of urgent vs elective appy
+```{r}
+
 
 library(mstate)
 NOM_patients$event <- factor(NOM_patients$status365, 0:2, c("Censored", "Elective", "Urgent/Emergent"))
@@ -91,6 +103,57 @@ fit$transitions
 plot(fit, xmax = 900, col = 1:2, lwd = 2,
      xlab = "Days from NOM", ylab = "Probability")
 legend(8, .2, c("Elective", "Urgent/Emergent"), lty = 1, lwd = 2, col = 1:2, bty = 'n')
+
+
+```
+
+## Setting up data for Kaplan Meier time to appendicitis symptoms
+```{r}
+
+NOM_patients$ed_ret_dateoutcomes[
+  NOM_patients$ed_ret_dateoutcomes == ""
+] <- NA
+
+NOM_patients$ed_ret_dateoutcomes <- as.Date(
+  NOM_patients$ed_ret_dateoutcomes,
+  format = "%m/%d/%Y"
+)
+
+#creating variable that is time in days from NOM decision to appy
+NOM_patients$time_to_EDsymptoms <- NOM_patients$ed_ret_dateoutcomes - NOM_patients$time_of_dxoutcomes
+
+
+NOM_patients$time_to_ED <- ifelse(
+  is.na(NOM_patients$time_to_EDsymptoms),
+  365,
+  NOM_patients$time_to_EDsymptoms
+)
+#administratively censoring those beyond 1 year
+NOM_patients$ED_status <- ifelse(
+  NOM_patients$time_to_ED > 365, 
+  0, #administratively censored beyond 1 year
+  NOM_patients$ed_return_365outcomes
+)
+
+table(NOM_patients$ED_status)
+
+
+#Should we show percentage of those who came back w/ symptoms but didn't get appendectomy?
+```
+
+#Kaplan Meier Plot of Time to Appendicitis symptoms
+```{r}
+km_fit <- survfit(Surv(time_to_ED, ED_status) ~ 1, data = NOM_patients, conf.type = "log-log")
+
+ggsurvplot(km_fit, data = NOM_patients, conf.int = T, ggtheme = theme_survminer(),
+           title = "Kaplan-Meier Survival Curve", xlab = "Time", ylab = "ED Visit Probability", palette = "blue")
+
+na_fit <- survfit(Surv(time_to_ED, ED_status) ~ 1, data = NOM_patients, conf.type = "log-log") 
+ggsurvplot(na_fit, fun = "cumhaz")
+
+```
+
+
 
 
 
@@ -111,4 +174,3 @@ legend(8, .2, c("Elective", "Urgent/Emergent"), lty = 1, lwd = 2, col = 1:2, bty
 # NOM_patients$interval_typeoutcomes #indicator of elective (1) or urgent/emergent (2) appy after NOM
 # NOM_patients$ed_return_365outcomes #indicator if patient returned to ED w/ appendicitis symptoms yes(1) no(0)
 # NOM_patients$ed_ret_dateoutcomes #date of first return to ED w/ appendicitis symptoms
-
