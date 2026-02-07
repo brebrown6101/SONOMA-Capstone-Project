@@ -263,16 +263,24 @@ clean_s <- clean_s %>%
   )
 
 
-#CCI to be up to 8, then greater than 8
+#CCI will be grouped into 0, 1-3, and >3
 clean_s$ccioutcomes <- round(as.numeric(clean_s$ccioutcomes))
 
-clean_s$ccioutcomes <- ifelse(
-  clean_s$ccioutcomes >= 8,
-  ">= 8",   # censored
-  clean_s$ccioutcomes
+clean_s <- clean_s %>% 
+  mutate(
+  ccioutcomes = case_when(
+    ccioutcomes > 3 ~ ">3", 
+    ccioutcomes == 1 | ccioutcomes == 2 | ccioutcomes == 3 ~ "1-3", 
+    ccioutcomes == 0 ~ "0"
+  )
 )
 
-
+#merge responses 0 and 2 into 0 for appendicolith outcomes
+clean_s$appendicolithoutcomes <- ifelse(
+  clean_s$appendicolithoutcomes == 1, 
+  1,
+  0
+)
 
 ###Relocates new columns to front
 clean_s <- clean_s %>%
