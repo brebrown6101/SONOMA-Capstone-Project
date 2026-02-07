@@ -6,9 +6,9 @@ output: html_document
 ---
 
 ```{r}
-data_path = 
+data_path = ""
 #"//biostat-fs2-s/users/jic034/Downloads/sonoma_cleaned.csv"
-"C:/Bre/SONOMA/Sonoma_cleaned.csv"
+#"C:/Bre/SONOMA/Sonoma_cleaned.csv"
 
 clean_s = read.csv(data_path, check.names = FALSE, row.names=1) 
 
@@ -106,4 +106,79 @@ p_lith <- ggplot(clean_s, aes(x = lith_factor, fill = initial_plan_factor)) +
 
 print(p_lith)
 
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+
+
+analysis_data <- clean_s %>%
+  filter(!is.na(initial_plan_factor)) %>% 
+  mutate(
+    wbc_val = as.numeric(as.character(wbcoutcomes)),
+    nlr_val = as.numeric(as.character(nlroutcomes)),
+    dia_val = as.numeric(as.character(appy_sizeoutcomes))
+  )
+
+# Simple Pairwise Table 
+# This calculates stats for each variable independently based on its available N
+clinical_summary <- analysis_data %>%
+  group_by(initial_plan_factor) %>%
+  summarise(
+    # WBC: Total N = 1281 (Appy) / 376 (NOM)
+    n_WBC      = sum(!is.na(wbc_val)),
+    Median_WBC = median(wbc_val, na.rm = TRUE),
+    
+    # NLR  has higher missingness
+    n_NLR      = sum(!is.na(nlr_val)),
+    Median_NLR = median(nlr_val, na.rm = TRUE),
+    
+    # Diameter  
+    n_Dia      = sum(!is.na(dia_val)),
+    Median_Dia = median(dia_val, na.rm = TRUE)
+  )
+
+print("Final Summary Table (Filtered for missing outcomes):")
+print(clinical_summary)
+
+#  Visualizations 
+plot_clinical_distribution <- function(data, variable, plot_title, y_label, use_log_scale = FALSE) {
+  p <- ggplot(data, aes(x = initial_plan_factor, y = .data[[variable]], fill = initial_plan_factor)) +
+    geom_violin(alpha = 0.3, color = NA, trim = TRUE, na.rm = TRUE) + 
+    geom_boxplot(width = 0.2, outlier.size = 1, alpha = 0.6, na.rm = TRUE) +
+    labs(title = plot_title, x = "", y = y_label) +
+    theme_minimal() +
+    theme(legend.position = "none", plot.title = element_text(face = "bold"))
+  
+  if(use_log_scale) {
+    p <- p + scale_y_log10()
+  }
+  return(p)
+}
+
+p_wbc <- plot_clinical_distribution(analysis_data, "wbc_val", "WBC Distribution", "10^9/L (Log)", use_log_scale = TRUE)
+p_nlr <- plot_clinical_distribution(analysis_data, "nlr_val", "NLR Distribution", "Ratio (Log)", use_log_scale = TRUE)
+p_dia <- plot_clinical_distribution(analysis_data, "dia_val", "Appendiceal Diameter", "mm")
+
+grid.arrange(p_wbc, p_nlr, p_dia, ncol = 3)
+```
+
+
+
+```{r}
+#Wilcoxon test see NOM and surgery group difference
+wbc_p_value <- wilcox.test(wbc_val ~ initial_plan_factor, data = analysis_data)$p.value
+nlr_p_value <- wilcox.test(nlr_val ~ initial_plan_factor, data = analysis_data)$p.value
+dia_p_value <- wilcox.test(dia_val ~ initial_plan_factor, data = analysis_data)$p.value
+
+test_results <- data.frame(
+  Variable = c("WBC Count", "NLR Ratio", "Appendiceal Diameter"),
+  P_Value = c(wbc_p_value, nlr_p_value, dia_p_value),
+  Significance = ifelse(c(wbc_p_value, nlr_p_value, dia_p_value) < 0.05, "Significant", "Not Significant")
+)
+
+print("Simple Statistical Test Results (Appendectomy vs NOM):")
+print(test_results)
 ```
