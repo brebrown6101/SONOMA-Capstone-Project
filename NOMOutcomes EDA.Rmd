@@ -87,6 +87,8 @@ NOM_patients$status365 <- factor(NOM_patients$status365, 0:2, c("None", "Electiv
 
 table(NOM_patients$status365)
 
+NOM_patients$appendicolithoutcomes <- factor(NOM_patients$appendicolithoutcomes, 0:1, c("Not Present", "Present"))
+
 
 ```
 
@@ -95,11 +97,33 @@ RaceEthnicity has the most categories out of our potential covariates. When cros
 ```{r, echo = FALSE}
 
 #Crosstable of RaceEthnicity by Status
-CrossTable(NOM_patients$RaceEthnicity, NOM_patients$status)
+CrossTable(NOM_patients$RaceEthnicity, NOM_patients$status365)
 
 
-cont_table <- table(NOM_patients$status, NOM_patients$RaceEthnicity)
+cont_table <- table(NOM_patients$status365, NOM_patients$RaceEthnicity)
 fisher.test(cont_table, workspace = 1e7, simulate.p.value = TRUE)
+
+#due to 0 cells, we collapse multiracial to Other/Not Specified
+NOM_patients$RaceEthnicity <- ifelse(
+  NOM_patients$RaceEthnicity == "Multiracial", 
+  "Other/Not Specified", 
+  NOM_patients$RaceEthnicity
+)
+
+cont_table <- table(NOM_patients$status365, NOM_patients$RaceEthnicity)
+fisher.test(cont_table, workspace = 1e7, simulate.p.value = TRUE)
+#still not significant
+
+ggbarstats( #completes chi-squared p-val and graphs
+  data = NOM_patients,
+  x = RaceEthnicity,
+  y = status365, 
+  results.subtitle = TRUE, 
+  proportion.test = FALSE, 
+  bf.message = FALSE, 
+   legend.title = "Race/Ethnicity", 
+  xlab = "1 Year Post-NOM Appendectomy Status"
+)
 
 
 #check for multicollinearity b/w variables?
@@ -109,7 +133,7 @@ fisher.test(cont_table, workspace = 1e7, simulate.p.value = TRUE)
 ```
 
 One-way ANOVA tests were used to test the association between post-NOM appendectomy status and continuous variables like age, WBC, and appendix diameter. All of these were found to not be significantly associated with post-NOM appendectomy status. Due to some sparse cells, Fisher's exact test was used to test the association between CCI and post-NOM appendectomy status and this test was also not statistically significant. Lastly, chi-squared tests were used to test the association between post-NOM appendectomy status and categorical variables like appendicolith presence and sex. Both these showed a not statistically significant relationship. 
-```{r, echo = FALSE, message = FALSE}
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
 
 
 library(ggstatsplot)
@@ -121,24 +145,59 @@ library(ggstatsplot)
 #Testing Age
 ggplot(data = NOM_patients, aes(x = ageoutcomes, y = status365)) +
   geom_boxplot() +
-  labs(y = "Post NOM Appendectomy Status", x = "Age")
+  labs(y = "1 Year Post NOM Appendectomy Status", x = "Age")
 
 
-anova_model <- aov(ageoutcomes ~ status, data = NOM_patients)
+anova_model <- aov(ageoutcomes ~ status365, data = NOM_patients)
 summary(anova_model)
 #not significant
 
+
+#WBC Count and NLR 
+
+#count of how many NOM patients have NLR recorded: 
+NOM_patients$nlroutcomes[
+  NOM_patients$nlroutcomes == ""
+] <- NA
+
+
+count_non_missing <- length(NOM_patients$nlroutcomes[!is.na(NOM_patients$nlroutcomes)])
+print(count_non_missing)
+#356/381 patients have NLR recorded
+
+#Testing association for WBC 
 ggplot(data = NOM_patients, aes(x = wbcoutcomes, y = status365)) +
   geom_boxplot() +
-  labs(y = "Post NOM Appendectomy Status", x = "WBC")
-anova_model2 <- aov(wbcoutcomes ~ status, data = NOM_patients)
+  labs(y = "1 Year Post NOM Appendectomy Status", x = "WBC")
+anova_model2 <- aov(wbcoutcomes ~ status365, data = NOM_patients)
 summary(anova_model2)
 #not significant
+
+NOM_patients$nlroutcomes <- as.numeric(NOM_patients$nlroutcomes)
+ggplot(data = NOM_patients, aes(x = nlroutcomes, y = status365)) +
+  geom_boxplot() +
+  labs(y = "1 Year Post NOM Appendectomy Status", x = "NLR")
+anova_model5 <- aov(nlroutcomes ~ status365, data = NOM_patients)
+summary(anova_model5)
+#Not significant
+
+
 
 #CrossTable of CCI and status to determine if should use Fisher's exact test or chi-squared
 NOM_patients$ccioutcomes <- as.factor(NOM_patients$ccioutcomes)
 CrossTable(NOM_patients$ccioutcomes, NOM_patients$status)
-contingency_table <- table(NOM_patients$status, NOM_patients$ccioutcomes)
+
+
+ggbarstats( #completes chi-squared p-val and graphs
+  data = NOM_patients,
+  x = ccioutcomes,
+  y = status365, 
+  results.subtitle = TRUE, 
+  proportion.test = FALSE, 
+  bf.message = FALSE, 
+   legend.title = "CCI Score", 
+  xlab = "1 Year Post-NOM Appendectomy Status"
+)
 fisher.test(contingency_table, workspace = 1e7)
 
 
@@ -147,8 +206,8 @@ fisher.test(contingency_table, workspace = 1e7)
 #Testing association of appy size and status
 ggplot(data = NOM_patients, aes(x = appy_sizeoutcomes, y = status365)) +
   geom_boxplot() +
-  labs(y = "Post NOM Appendectomy Status", x = "Appendix Diameter")
-anova_model3 <- aov(appy_sizeoutcomes ~ status, data = NOM_patients)
+  labs(y = "1 Year Post NOM Appendectomy Status", x = "Appendix Diameter")
+anova_model3 <- aov(appy_sizeoutcomes ~ status365, data = NOM_patients)
 summary(anova_model3)
 #92/354 missing appendix size at index
 
@@ -157,20 +216,23 @@ summary(anova_model3)
 ggbarstats( #completes chi-squared p-val and graphs
   data = NOM_patients,
   x = appendicolithoutcomes,
-  y = status, 
+  y = status365, 
   results.subtitle = TRUE, 
   proportion.test = FALSE, 
-  bf.message = FALSE, 
+  bf.message = FALSE,
+  legend.title = "Appendicolith at Index", 
+  xlab = "1 Year Post-NOM Appendectomy Status"
 )
 
 #Testing Sex
 ggbarstats( #completes chi-squared p-val and graphs
   data = NOM_patients,
   x = Sex,
-  y = status, 
+  y = status365, 
   results.subtitle = TRUE, 
   proportion.test = FALSE, 
   bf.message = FALSE, 
+   xlab = "1 Year Post-NOM Appendectomy Status"
 )
 
 ```
