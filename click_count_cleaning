@@ -1,0 +1,56 @@
+#Author:GA
+#For specific click count excel sheet
+
+#rm(list = ls())
+#data handling
+library(tidyverse)
+library(gtsummary)
+library(haven)
+
+#load data
+#setwd("H:/giallen/SONOMA")
+
+#read in specific  rows
+clicks <- readxl::read_xlsx('clicks.xlsx',
+                            range = "A2:T19")
+
+#drop extras
+clicks <- clicks[1:16, -2]
+
+clicks <- clicks %>% mutate(
+  across(-'Site Name', ~ readr::parse_number(as.character(.x)))
+)
+
+#go long
+clicks_by_month <- clicks %>% pivot_longer(
+    -'Site Name',
+    names_to  = "month",
+    values_to = "value")
+
+#correct date
+clicks_by_month <- clicks_by_month %>% mutate(
+  num = as.numeric(month),
+  date = as.Date(num, origin = '1899-12-30'), #excel base date
+  floor_date = floor_date(date, 'month'))
+clicks_by_month <- clicks_by_month %>% rename("site" = "Site Name") %>% 
+  mutate(site_fixed = case_when(
+    site == "Atrium" ~ "Atrium Health",
+    site == "Boston" ~ "Boston Medical Center",
+    site == "Columbia" ~ "Columbia University Medical Center",
+    site == "Grady" ~ "Grady Health System",
+    site == "Iowa" ~ "University of Iowa Hospital and Clinics",
+    site == 'Harborview' ~ "Harborview Medical Center",
+    site == "LBJ" ~ "Lyndon B Johnson Hospital",
+    site == "Michigan" ~ "Michigan Medicine",
+    site == "UW Mont" ~ "University of Washington-Montlake",
+    site == "UW NW" ~ "Northwest Hospital-University of Washington",
+    TRUE ~ site))
+
+#drop extra cols
+clicks_by_month <- clicks_by_month %>% select(-site, -month, -num, -date)
+
+#fix names
+clicks_by_month <- clicks_by_month %>% rename("site_name" = "site_fixed",
+                                              "month" = "floor_date")
+
+saveRDS(clicks_by_month, 'clicks_clean.rds')
