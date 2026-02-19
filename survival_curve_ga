@@ -1,0 +1,106 @@
+#survival-------------------------
+library(ggsurvfit)
+#subset of NOM patients 
+nom_sonoma <- nom_sonoma %>%
+  mutate(
+    nom_tta = as.numeric(nom_tta),
+    censor_nom = if_else(!is.na(nom_tta), nom_tta, 50000),
+    urgent_time = if_else(interval_typeoutcomes == "Urgent/Emergent" & !is.na(nom_tta), nom_tta, 50000),
+    urgent_event = if_else(interval_typeoutcomes == "Urgent/Emergent" & !is.na(nom_tta), 1, 0),
+    elective_time = if_else(interval_typeoutcomes == "Elective" & !is.na(nom_tta), nom_tta, 50000),
+    elective_event = if_else(interval_typeoutcomes == "Elective" & !is.na(nom_tta), 1, 0),
+    symptom_time =  if_else(symptom_driven_appy == TRUE & !is.na(nom_tta), nom_tta, 50000),
+    symptom_event =  if_else(symptom_driven_appy == TRUE  & !is.na(nom_tta), 1, 0),
+    non_symptom_time =  if_else(symptom_driven_appy == FALSE & !is.na(nom_tta), nom_tta, 50000),
+    non_symptom_event =  if_else(symptom_driven_appy == FALSE  & !is.na(nom_tta), 1, 0))
+
+all_appy <- survfit2(Surv(nom_sonoma$censor_nom, nom_sonoma$nom_appy) ~ 1) 
+all_appy_site <- survfit2(Surv(nom_sonoma$censor_nom, nom_sonoma$nom_appy) ~ nom_sonoma$site_name) 
+urgent_appy <-survfit2(Surv(nom_sonoma$urgent_time, nom_sonoma$urgent_event) ~ 1)
+elective_appy <- survfit2(Surv(nom_sonoma$elective_time, nom_sonoma$elective_event) ~ 1)
+symp_appy <-survfit2(Surv(nom_sonoma$symptom_time, nom_sonoma$symptom_event) ~ 1)
+non_symp_appy <- survfit2(Surv(nom_sonoma$non_symptom_time, nom_sonoma$non_symptom_event) ~ 1)
+
+urgent_appy_df <- broom::tidy(urgent_appy)
+elective_appy_df <- broom::tidy(elective_appy)
+
+symp_appy_df <- broom::tidy(symp_appy)
+non_symp_appy_df <- broom::tidy(non_symp_appy)
+
+dummy <- data.frame(x = 0, ymin = 0, ymax = 0)
+
+plot_all <- ggsurvfit(all_appy, type = 'risk') +
+  labs(
+    x = "Days After Index Treatment with Antibiotics",
+    y = "Risk of Appendectomy",
+    title = "Risk of Appendectomy After NOTA") + 
+  scale_x_continuous(breaks = c(0, 30, 90, 180, 270, 365)) +
+  add_risktable(risktable_stats = c("n.risk", "{round(estimate*100)}%"),
+                stats_label = list("NOM Patients", "% w/ Appendectomy"),
+                risktable_height = 0.07,
+                size = 6) + 
+  ylim(0, 0.5) +
+  add_confidence_interval(fill = "#1f77b4", alpha = 0.3) 
+
+theme_ppt <- theme_minimal(base_size = 16) + 
+  theme(
+    plot.title = element_text(face = "bold", size = 20, hjust = 0.5),
+    axis.title = element_text(face = "bold"),
+    legend.title = element_text(face = "bold"),
+    legend.position = "bottom",
+    axis.title.x = element_text(size = 18, face = "bold"),  
+    axis.title.y = element_text(size = 18, face = "bold"),
+    axis.text.x = element_text(size = 18),                   
+    axis.text.y = element_text(size = 18)                   
+  )
+
+plot_all <- plot_all + theme_ppt
+print(plot_all)
+
+#symptom vs non-symptoms
+plot_combined_symptom <- plot_all + 
+  geom_step(data = symp_appy_df, 
+            aes(x = time, y = 1 - estimate)) +
+  geom_step(data = non_symp_appy_df, 
+            aes(x = time, y = 1 - estimate)) +
+  geom_ribbon(data = symp_appy_df, aes(x = time, ymin = 1- conf.low, ymax = 1- conf.high, fill = 'Symptom Driven'), 
+              alpha = 0.3) +
+  geom_ribbon(data = non_symp_appy_df, aes(x = time, ymin = 1-conf.low, ymax = 1- conf.high, fill = 'Non-Symptom Driven'), 
+              alpha = 0.3) +
+  geom_ribbon(data = dummy, aes(x = x, ymin = ymin, ymax = ymax, fill = "Any"),
+              inherit.aes = FALSE,
+              alpha = 0) +
+  coord_cartesian(xlim = c(0, 365)) +
+  scale_fill_manual(
+    name = "Appendectomy by Type",
+    values = c(
+      "Symptom Driven" = "#ff7f0e",
+      "Non-Symptom Driven" = "#2ca02c",
+      "Any" = '#1f77b4')) +
+  guides(fill = guide_legend(override.aes = list(alpha = 0.3)))
+
+print(plot_combined_symptom)
+
+#urgent vs elective
+plot_combined <- plot_all + 
+  geom_step(data = symptom, 
+            aes(x = time, y = 1 - estimate)) +
+  geom_step(data = elective_appy_df, 
+            aes(x = time, y = 1 - estimate)) +
+  geom_ribbon(data = urgent_appy_df, aes(x = time, ymin = 1- conf.low, ymax = 1- conf.high, fill = 'Urgent'), 
+              alpha = 0.3) +
+  geom_ribbon(data = elective_appy_df, aes(x = time, ymin = 1-conf.low, ymax = 1- conf.high, fill = 'Elective'), 
+              alpha = 0.3) +
+  geom_ribbon(data = dummy, aes(x = x, ymin = ymin, ymax = ymax, fill = "Any"),
+              inherit.aes = FALSE,
+              alpha = 0) +
+  coord_cartesian(xlim = c(0, 365)) +
+  scale_fill_manual(
+    name = "Appendectomy by Type",
+    values = c(
+      "Urgent" = "#ff7f0e",
+      "Elective" = "#2ca02c",
+      "Any" = '#1f77b4')) +
+  guides(fill = guide_legend(override.aes = list(alpha = 0.3)))
+
+print(plot_combined)
