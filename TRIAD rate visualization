@@ -1,0 +1,239 @@
+#visualization file for SONOMA/TRIAD overlap
+#version 1
+#author: G. Allen
+
+#data/wd------------------------------
+rm(list = ls())
+#data handling
+library(tidyverse)
+library(gtsummary)
+
+#setwd("H:/giallen/SONOMA")
+sonoma <- readRDS("sonoma.rds") #main DS
+clicks_by_month <- readRDS("clicks_clean.rds") #click data, 
+
+#add implementation dates----------------------
+start_dates <- tribble(
+  ~site_name, ~start_date,
+  "Atrium Health", as.Date("9/29/2023", "%m/%d/%Y"),
+  "Boston Medical Center",  as.Date("9/24/2023", "%m/%d/%Y"),
+  "Columbia University Medical Center",  as.Date("9/27/2023", "%m/%d/%Y"),
+  "University of Iowa Hospital and Clinics",  as.Date("9/9/2023", "%m/%d/%Y"),
+  "Grady Health System",  as.Date("12/30/2023", "%m/%d/%Y"),
+  "Michigan Medicine",  as.Date("10/30/2023", "%m/%d/%Y"),
+  "Harborview Medical Center",  as.Date("10/3/2023", "%m/%d/%Y"),
+  "University of Washington-Montlake",  as.Date("9/27/2023", "%m/%d/%Y"),
+  "Northwest Hospital-University of Washington",  as.Date("9/26/2023", "%m/%d/%Y"))
+
+
+#inclusion/exclusion---------------------
+#drop LBJ just for this analysis - incomplete data
+sonoma <- sonoma %>% filter(site_name != 'Lyndon B Johnson Hospital')
+
+#final inclusion
+sonoma <- sonoma %>% filter(eligiblefull == 1) 
+
+#factor creation---------------------
+sonoma <- sonoma %>% mutate(plan = factor(initial_planoutcomes, levels = c(1, 2), labels = c("Appendectomy", "NOM")))
+
+
+#create monthly data per site-----------------------------
+month_site <- sonoma %>% mutate(month = floor_date(as.Date(firstdxoutcomes), 'month')) %>% 
+  filter(month >= "2023-01-01" & month <= "2024-08-01") %>% 
+  group_by(month, site_name) %>% 
+  summarise(aua = n(), #total count
+            dst = sum(decision_aidoutcomes, na.rm = TRUE), #DST usagae
+            prop_dst = dst/aua*100, #DST per AUA
+            nom = sum(plan == 'NOM', na.rm = TRUE), #fraction of NOM usage
+            prop_nom = nom/aua*100) #nom fraction
+
+#join in click data
+month_site <- month_site %>% left_join(clicks_by_month, by = c("site_name", "month"))
+
+#join in start dates
+month_site <- month_site %>% left_join(start_dates, by = c("site_name"))
+
+
+
+month_site$value[which(is.na(month_site$value))] <- 0 #missing dates are no clicks
+
+month_site <- month_site %>% mutate(prop_clicks = value/aua,
+                                    prop_click_nom = value/nom,
+                                    click_to_dst = dst/value,
+                                    coda_site = case_when(
+                                      site_name == "Atrium Health" | site_name == "Grady Health System" ~ "Non-CODA Sites", #note NW counted as CODA site as part of 
+                                      TRUE ~ "CODA Sites"))
+
+#monthly data by CODA---------------------------------------
+month_coda <- month_site %>% group_by(coda_site, month) %>% 
+  summarise(aua = sum(aua, na.rm = TRUE), 
+            clicks = sum(value, na.rm = TRUE),
+            nom = sum(nom, na.rm = TRUE),
+            dst = sum(dst, na.rm = TRUE),
+            prop_dst = dst/aua*100,
+            dst_to_click = dst/clicks,
+            prop_clicks = clicks/aua,
+            dst_to_nom = dst/nom,
+            prop_clicks_nom = clicks/nom,
+            prop_nom = nom/aua*100,
+            clicks_non_zero = clicks > 0,
+            dst_non_zero = dst > 0)
+
+#visualizations
+#clicks----------------
+#not faceted
+clicks_nom_no_facet <- month_coda %>% ggplot(aes()) +
+  geom_point(aes(x = month, y = prop_nom, color = coda_site, size = clicks), data = month_coda) +
+  geom_smooth(aes(x = month, y = prop_nom, color = coda_site), data = month_coda) +
+  labs(x = "Month",
+       y = "Proportion of Appendicitis Patients Mananged Non-Operatively",
+       size = "AppyOrNot Clicks",
+       title = "Utilization of Non-Operative Management Before and After TRIAD Implementation",
+       color = "CODA Participation") +
+  theme_bw()
+
+clicks_nom_no_facet
+ggsave('nom_utilizaiton_nonfaceted.png', dpi = 300)
+
+clicks_nom_facet <- month_coda %>% ggplot(aes()) +
+  geom_point(aes(x = month, y = prop_nom, color = coda_site, size = clicks), data = month_coda) +
+  geom_smooth(aes(x = month, y = prop_nom, color = coda_site), data = month_coda) +
+  facet_grid(~coda_site) +
+  labs(x = "Month",
+       y = "Proportion of Appendicitis Patients Mananged Non-Operatively",
+       size = "AppyOrNot Clicks",
+       title = "Utilization of Non-Operative Management Before and After TRIAD Implementation",
+       color = "CODA Participation") +
+  theme_bw()
+
+clicks_nom_facet
+ggsave('nom_utilizaiton_faceted.png', dpi = 300)
+
+#DST-----------
+dst_nom_no_facet <- month_coda %>% ggplot(aes()) +
+  geom_point(aes(x = month, y = prop_nom, color = coda_site, size = prop_dst), data = month_coda) +
+  geom_smooth(aes(x = month, y = prop_nom, color = coda_site), data = month_coda) +
+  labs(x = "Month",
+       y = "Proportion of Appendicitis Patients Mananged Non-Operatively",
+       size = "% AppyOrNot Usage Documented",
+       title = "Utilization of Non-Operative Management Before and After TRIAD Implementation",
+       color = "CODA Participation") +
+  theme_bw()
+
+dst_nom_no_facet
+ggsave('nom_dst_utilizaiton_nonfaceted.png', dpi = 300)
+
+dst_nom_facet <- month_coda %>% ggplot(aes()) +
+  geom_point(aes(x = month, y = prop_nom, color = coda_site, size = prop_dst), data = month_coda) +
+  geom_smooth(aes(x = month, y = prop_nom, color = coda_site), data = month_coda) +
+  facet_grid(~coda_site) +
+  labs(x = "Month",
+       y = "Proportion of Appendicitis Patients Mananged Non-Operatively",
+       size = "% AppyOrNot Usage Documented",
+       title = "Utilization of Non-Operative Management Before and After TRIAD Implementation",
+       color = "CODA Participation") +
+  theme_bw()
+
+dst_nom_facet
+ggsave('nom_dst_utilizaiton_faceted.png', dpi = 300)
+
+
+#alternative time-----------------------
+
+month_site <- sonoma %>% mutate(month = floor_date(as.Date(firstdxoutcomes), 'week')) %>% 
+  filter(month >= "2023-01-01" & month <= "2024-08-01") %>% 
+  group_by(month, site_name) %>% 
+  summarise(aua = n(), #total count
+            dst = sum(decision_aidoutcomes, na.rm = TRUE), #DST usagae
+            prop_dst = dst/aua*100, #DST per AUA
+            nom = sum(plan == 'NOM', na.rm = TRUE), #fraction of NOM usage
+            prop_nom = nom/aua*100) #nom fraction
+
+#join in click data
+month_site <- month_site %>% left_join(clicks_by_month, by = c("site_name", "month"))
+
+#join in start dates
+month_site <- month_site %>% left_join(start_dates, by = c("site_name"))
+
+
+
+month_site$value[which(is.na(month_site$value))] <- 0 #missing dates are no clicks
+
+month_site <- month_site %>% mutate(prop_clicks = value/aua,
+                                    prop_click_nom = value/nom,
+                                    click_to_dst = dst/value,
+                                    coda_site = case_when(
+                                      site_name == "Atrium Health" | site_name == "Grady Health System" ~ "Non-CODA Sites", #note NW counted as CODA site as part of 
+                                      TRUE ~ "CODA Sites"))
+
+#monthly data by CODA---------------------------------------
+month_coda <- month_site %>% group_by(coda_site, month) %>% 
+  summarise(aua = sum(aua, na.rm = TRUE), 
+            clicks = sum(value, na.rm = TRUE),
+            nom = sum(nom, na.rm = TRUE),
+            dst = sum(dst, na.rm = TRUE),
+            prop_dst = dst/aua*100,
+            dst_to_click = dst/clicks,
+            prop_clicks = clicks/aua,
+            dst_to_nom = dst/nom,
+            prop_clicks_nom = clicks/nom,
+            prop_nom = nom/aua*100,
+            clicks_non_zero = clicks > 0,
+            dst_non_zero = dst > 0)
+
+
+#visualizations
+#clicks----------------
+#not faceted
+clicks_nom_no_facet_alt <- month_coda %>% ggplot(aes()) +
+  geom_point(aes(x = month, y = prop_nom, color = coda_site, size = clicks), data = month_coda) +
+  geom_smooth(aes(x = month, y = prop_nom, color = coda_site), data = month_coda) +
+  labs(x = "Month",
+       y = "Proportion of Appendicitis Patients Mananged Non-Operatively",
+       size = "AppyOrNot Clicks",
+       title = "Utilization of Non-Operative Management Before and After TRIAD Implementation",
+       color = "CODA Participation") +
+  theme_bw()
+
+clicks_nom_no_facet_alt
+
+clicks_nom_facet_alt <- month_coda %>% ggplot(aes()) +
+  geom_point(aes(x = month, y = prop_nom, color = coda_site, size = clicks), data = month_coda) +
+  geom_smooth(aes(x = month, y = prop_nom, color = coda_site), data = month_coda) +
+  facet_grid(~coda_site) +
+  labs(x = "Month",
+       y = "Proportion of Appendicitis Patients Mananged Non-Operatively",
+       size = "AppyOrNot Clicks",
+       title = "Utilization of Non-Operative Management Before and After TRIAD Implementation",
+       color = "CODA Participation") +
+  theme_bw()
+
+clicks_nom_facet_alt
+
+#DST-----------
+dst_nom_no_facet_alt <- month_coda %>% ggplot(aes()) +
+  geom_point(aes(x = month, y = prop_nom, color = coda_site, size = prop_dst), data = month_coda) +
+  geom_smooth(aes(x = month, y = prop_nom, color = coda_site), data = month_coda) +
+  labs(x = "Month",
+       y = "Proportion of Appendicitis Patients Mananged Non-Operatively",
+       size = "% AppyOrNot Usage Documented",
+       title = "Utilization of Non-Operative Management Before and After TRIAD Implementation",
+       color = "CODA Participation") +
+  theme_bw()
+
+dst_nom_no_facet_alt
+
+dst_nom_facet_alt <- month_coda %>% ggplot(aes()) +
+  geom_point(aes(x = month, y = prop_nom, color = coda_site, size = prop_dst), data = month_coda) +
+  geom_smooth(aes(x = month, y = prop_nom, color = coda_site), data = month_coda) +
+  facet_grid(~coda_site) +
+  labs(x = "Month",
+       y = "Proportion of Appendicitis Patients Mananged Non-Operatively",
+       size = "% AppyOrNot Usage Documented",
+       title = "Utilization of Non-Operative Management Before and After TRIAD Implementation",
+       color = "CODA Participation") +
+  theme_bw()
+
+dst_nom_facet_alt
+
+
