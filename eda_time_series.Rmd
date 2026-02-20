@@ -1,62 +1,298 @@
 ```{r}
 library(ggplot2)
 library(dplyr)
+library(lubridate)
+library(knitr)
+library(tidyr)
+library(gtsummary)
+library(kableExtra)
+library(webshot2)
 
-site_indicators <- c(
-  "1" = "Atrium", 
-  '2' = "Boston University", 
-  '3' = "Columbia", 
-  '4' = "Grady", 
-  '5' = "UT Health & LBJ", 
-  '6' = "Michigan", 
-  '7' = "Northwestern", 
-  '8' = "Iowa", 
-  '9' = "University of Washington",
-  '10' = "Medical University of South Carolina",
-  '11' = "Kaiser Permanente")
-
-start_dates = read.csv("//biostat-fs2-s/users/sherold/Documents/SONOMA-Data/TRIADPhase2_Site_Start_Date_V5_20231215.csv")
-start_dates = start_dates %>% select(-site_num)
 ```
 
 
+# Load Start Dates
 ```{r}
-data = read.csv("//biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_cleaned.csv")
+start_dates = read.csv("SONOMA-Data/TRIADPhase2_Site_Start_Date_V5_20231215.csv")
+start_dates = start_dates %>% select(-site_num)
+start_dates$start_date = as.POSIXct(start_dates$start_date)
+
+nrow(data[data$choice == "NOM",])
+```
+
+
+# Load and clean data
+```{r}
+data = read.csv("SONOMA-Data/sonoma_cleaned_2_20260202.csv")
+
 data$firstdxoutcomes = as.POSIXct(data$firstdxoutcomes)
 data$initial_planoutcomes = data$initial_planoutcomes - 1
-data$choice = factor(data$initial_planoutcomes, levels = c(0,1), labels = c("Surgery", "NOM"))
-data <- data %>%
-  filter(!is.na(choice))
-data = data %>% 
-  mutate(
-    site_name = case_when(sitesite_abstractor == 9 & uw_site_specificsite_abstractor == 1 ~ "Harborview Medical Center",
-                             sitesite_abstractor == 9 & uw_site_specificsite_abstractor == 2 ~ "University of Washington-Montlake",
-                             sitesite_abstractor == 9 & uw_site_specificsite_abstractor == 3 ~ "Northwest Hospital-University of Washington",
-                             sitesite_abstractor == 1 & atrium_site_specificsite_abstractor == 1 ~ "Atrium Health",
-                             sitesite_abstractor == 1 & atrium_site_specificsite_abstractor == 2 ~ "Atrium Health",
-                             sitesite_abstractor == 5 & uth_lbj_subsite == 1 ~ "Lyndon B Johnson Hospital",
-                             sitesite_abstractor == 5 & uth_lbj_subsite == 2 ~ "UT Health Science Center",
-                             sitesite_abstractor == 2 ~ "Boston Medical Center",
-                             sitesite_abstractor == 3 ~ "Columbia University Medical Center",
-                             sitesite_abstractor == 4 ~ "Grady Health System",
-                             sitesite_abstractor == 6 ~ "Michigan Medicine",
-                             sitesite_abstractor == 7 ~ "Northwestern Medicine",
-                             sitesite_abstractor == 8 ~ "University of Iowa Hospital and Clinics",
-                             sitesite_abstractor == 10 ~ "Medical University of South Carolina",
-                             sitesite_abstractor == 11 ~ "Kaiser Permanente"))
-
-
+data$choice = factor(data$initial_planoutcomes, levels = c(0,1), labels = c("Surgery", "NOM" ))
 data = merge(x = data, y = start_dates, by = "site_name", all.x = TRUE)
-data$start_date = as.POSIXct(data$start_date)
+
+data <- data %>%
+  filter(!is.na(choice) ) %>%
+  filter(site_name != "Lyndon B Johnson Hospital") %>%
+  relocate(RecordID, 
+           site_name, 
+           initial_planoutcomes, 
+           choice,
+           start_date,
+           firstdxoutcomes) %>%
+  filter(firstdxoutcomes > as.Date("2022-12-01") & firstdxoutcomes < as.Date("2024-08-30"))
+
+```
+
+
+# Initial Plot, raw data
+```{r, fig.width=8, fig.height=6}
+raw_plot = ggplot(data = data, aes(x = as.Date(firstdxoutcomes), y = choice)) + 
+  geom_jitter(alpha = .2, size = 1, width = .1, height = .01) + 
+  geom_vline(aes(xintercept = as.Date(start_date), color = "AppyOrNot"), size = .75) +
+  labs(color = "") +
+  xlab("Date of Index") +
+  ylab("Choice at Index") + 
+  geom_text(
+    data = start_dates[start_dates$site_name %in% unique(data$site_name), ],
+    aes(
+      label = format(start_date, "%B %d %Y"),
+      x = as.Date(start_date) %m+% days(140), 
+      y = 1.2
+    ),
+    vjust = -0.6,
+    size = 3.2,
+    color = "red"
+  ) +
+  facet_wrap(~site_name) +
+  theme_bw() +
+  labs(title = "NOM vs. Surgery Selections Over Time") + 
+scale_x_date(
+    breaks = 
+      as.Date(c(
+        "2023-4-01",
+        "2024-4-01"
+      ))
+      ,
+    labels = function(x) format(x, "%B %d %Y")  # e.g., "January 2020"
+  ) + 
+  theme(strip.text = element_text(size = 7))
+
+
+
+
+ggsave("/home/users/sherold/Documents/SONOMA-figures/raw_plot.png", plot = raw_plot, width = 12, height = 6)
+
+```
+
+
+# Introduce Pre/Post periods and summarize on UNBINNED DATA
+```{r}
+ts_unbinned = data %>%
+  group_by(site_name, RecordID, firstdxoutcomes) %>%
+  summarise(
+    n_TOTAL = n(),
+    n_NOM = sum(initial_planoutcomes == 1, na.rm = TRUE),
+    n_SURGERY = sum(initial_planoutcomes == 0, na.rm = TRUE),
+    NOM_rate = n_NOM/n_TOTAL,
+    start_date = as.Date(start_date),
+    .groups = "drop"
+  )
+  #filter(firstdxoutcomes > as.Date("2022-12-01") & firstdxoutcomes < as.Date("2024-08-30"))
+  
+ts_unbinned = ts_unbinned %>% mutate(post = case_when(firstdxoutcomes >= start_date ~ 1,
+                               firstdxoutcomes < start_date ~ 0))  
+```
+
+
+```{r}
+# Get Site totals and rates
+site_summary <- ts_unbinned %>%
+  group_by(site_name, post) %>%
+  summarise(
+    N = sum(n_TOTAL),
+    NOM_Count = sum(n_NOM),
+    NOM_rate = sum(n_NOM) / sum(n_TOTAL),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    Period = if_else(post == 1, "Post", "Pre")
+  ) %>%
+  select(site_name, Period, N, NOM_Count, NOM_rate)
+
+site_summary_wide <- site_summary %>%
+  pivot_wider(
+    names_from = Period,
+    values_from = c(N, NOM_Count, NOM_rate)
+  )
+
+# Add overall (All sites) row
+site_summary_wide <- bind_rows(
+  site_summary_wide,
+  site_summary_wide %>%
+    summarise(
+      site_name = "All",
+      N_Pre = sum(N_Pre, na.rm = TRUE),
+      N_Post = sum(N_Post, na.rm = TRUE),
+      NOM_Count_Pre = sum(NOM_Count_Pre, na.rm = TRUE),
+      NOM_Count_Post = sum(NOM_Count_Post, na.rm = TRUE),
+      NOM_rate_Pre = NOM_Count_Pre / N_Pre,
+      NOM_rate_Post = NOM_Count_Post / N_Post
+    )
+)
+
+# Add rate difference + format for display
+site_summary_wide <- site_summary_wide %>%
+  mutate(
+    NOM_Rate_Diff = NOM_rate_Post - NOM_rate_Pre,
+    across(starts_with("NOM_rate"), ~ round(. * 100, 1)),
+  ) %>%
+  rename(
+    "Site" = site_name,
+    "Events Pre" = N_Pre,
+    "Events Post" = N_Post,
+    "NOM Count Pre"= NOM_Count_Pre,
+    "NOM Count Post" = NOM_Count_Post,
+    "NOM Rate Pre" = NOM_rate_Pre,
+    "NOM Rate Post" = NOM_rate_Post,
+    "Change in NOM Rate" = NOM_Rate_Diff
+  )
+                                   
+```
+
+# Plot TS Table 1
+```{r}
+site_summary_wide %>%
+  mutate(across((ncol(.)-2):ncol(.), ~ paste0(.x, "%"))) %>%
+  kbl(
+    align = rep("l", ncol(.))
+  ) %>%
+  kable_classic(full_width = FALSE, html_font = "Cambria") %>% row_spec(nrow(site_summary_wide)-1,
+         extra_css = "border-bottom: 2px solid black;")
+
+```
+
+# Monthly Rates
+```{r}
+ts_month = data %>%
+  mutate(month = as.Date(floor_date(firstdxoutcomes, unit = "month"))) %>%
+  group_by(site_name, month) %>%
+  summarise(
+    n_TOTAL = n(),
+    n_NOM = sum(initial_planoutcomes == 1, na.rm = TRUE),
+    n_SURGERY = sum(initial_planoutcomes == 0, na.rm = TRUE),
+    NOM_rate = n_NOM/n_TOTAL,
+    start_date = first(as.Date(start_date)),
+  ) %>%
+  filter(month > as.Date("2022-12-01") & month < as.Date("2024-08-30"))%>% 
+                               mutate(month = month + 14)
+```
+
+
+```{r, fig.width=8, fig.height=6}
+rate_plot = ggplot(data = ts_month, 
+       aes(x = month, y = NOM_rate, group = site_name)) + 
+  geom_point(size = 1,) + 
+  geom_line(size = .75, alpha = .6) +
+  geom_vline(aes(xintercept = as.Date(start_date), color = "AppyOrNot"), size = .75) +
+  labs(color = "") +
+  xlab("Date") +
+  ylab("Montly NOM Rate") + 
+
+  facet_wrap(~site_name) +
+  theme_bw() +
+  labs(title = "Monthly NOM Rate Over Time") + 
+scale_x_date(
+    breaks = 
+      as.Date(c(
+        "2023-4-01",
+        "2024-4-01"
+      ))
+      ,
+    labels = function(x) format(x, "%B %d %Y")  # e.g., "January 2020"
+  ) + 
+  theme(strip.text = element_text(size = 7))
+
+
+
+
+ggsave("/home/users/sherold/Documents/SONOMA-figures/rate_plot.png", plot = rate_plot, width = 12, height = 6)
+
+```
+```
+
+
+
+# Introduce Click Rate
+
+```{r}
+clicks_raw = read.csv("SONOMA-Data/Site Tally(Clicks per month)_cleaned.csv")
+month_cols <- c("Oct.23","Nov.23","Dec.23","Jan.24","Feb.24","Mar.24",
+                "Apr.24","May.24","Jun.24","Jul.24","Aug.24","Sep.24", 
+                "Oct.24", "Nov.24", "Dec.24", "Jan.25", "Feb.25", "Mar.25")
+
+clicks = clicks_raw %>%
+  select(-c(Date.TTT.Completed.Site.Launch, Total, average.for.2024)) %>% 
+  mutate(across(all_of(month_cols), ~ as.numeric(.))) %>% 
+  pivot_longer(
+    cols = all_of(month_cols),
+    names_to = "month",
+    values_to = "clicks"
+  ) %>%
+  mutate(
+    month = as.Date(paste0("01-", month), format = "%d-%b.%y")
+  ) 
+
+ts_clicks = merge(x = ts_month, y = clicks, by = c("site_name", "month"), all.x = TRUE) %>% 
+    mutate(across(everything(), ~ replace_na(., 0)))
+
+ts_clicks = ts_clicks %>% mutate(post = case_when(month >= start_date ~ 1,
+                               month < start_date ~ 0))  %>% 
+                               mutate(month = month + 14)
+
+```
+```
+
+```{r, fig.width=8, fig.height=6}
+click_plot = ggplot(data = ts_clicks, 
+       aes(x = month, y = clicks, group = site_name)) + 
+  geom_point(size = 1,) + 
+  geom_line(size = .75, alpha = .6) +
+  geom_vline(aes(xintercept = as.Date(start_date), color = "AppyOrNot"), size = .75) +
+  labs(color = "") +
+  xlab("Date") +
+  ylab("Monthly AppyOrNot Clicks") + 
+
+  facet_wrap(~site_name) +
+  theme_bw() +
+  labs(title = "Monthly AppyOrNot Clicks") + 
+scale_x_date(
+    breaks = 
+      as.Date(c(
+        "2023-4-01",
+        "2024-4-01"
+      ))
+      ,
+    labels = function(x) format(x, "%B %d %Y")  # e.g., "January 2020"
+  ) + 
+  theme(strip.text = element_text(size = 7))
+
+
+
+
+ggsave("/home/users/sherold/Documents/SONOMA-figures/click_plot.png", plot = click_plot, width = 12, height = 6)
 ```
 
 ```{r}
-ggplot(data = data, aes(x = firstdxoutcomes, y = choice)) + 
-  geom_point(alpha = .25, size = 1) + 
-  geom_vline(aes(xintercept = start_date, color = "AppyOrNot")) +
+click_nom_compare = ggplot(data = ts_clicks, aes(x = clicks, y = as.factor(n_NOM))) + 
+  geom_point(alpha = .25) +
+  xlab("Monthly AppyOrNot Clicks") +
+  ylab("Monthly NOM Count") +
   facet_wrap(~site_name) +
-  labs(color = "") +
-    xlab("Date of Index") +
-  ylab("Choice at Index")
+  theme_bw() + 
+  theme(strip.text = element_text(size = 5)) +
+  labs(title = "Monthly AppyOrNot Clicks and NOM Count")
+
+ggsave("/home/users/sherold/Documents/SONOMA-figures/click_nom_compare.png", plot = click_nom_compare, width = 6, height = 6)
 ```
+
 
