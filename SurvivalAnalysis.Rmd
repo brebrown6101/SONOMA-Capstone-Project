@@ -13,6 +13,7 @@ library(survMisc)
 library(ggplot2)
 library(dplyr)
 library(lubridate)
+library(ggsurvfit)
 ```
 
 #Data Set Up
@@ -30,10 +31,9 @@ NOM_patients$time_of_dxoutcomes <- gsub(" .*","", NOM_patients$time_of_dxoutcome
 #sum(is.na(NOM_patients$time_of_dxoutcomes)) #checking for NAs again
 
 #converting date_index to date object
-NOM_patients$time_of_dxoutcomes <- as.Date(
-  NOM_patients$time_of_dxoutcomes,
-  format = "%m/%d/%Y"
-)
+
+
+NOM_patients$time_of_dxoutcomes <- ymd(NOM_patients$time_of_dxoutcomes)
 
 
 #converting date of appendectomy after NOM to date object, converting blanks to NAs
@@ -41,10 +41,7 @@ NOM_patients$appy_int_dateoutcomes[
   NOM_patients$appy_int_dateoutcomes == ""
 ] <- NA
 
-NOM_patients$appy_int_dateoutcomes <- as.Date(
-  NOM_patients$appy_int_dateoutcomes,
-  format = "%m/%d/%Y"
-)
+NOM_patients$appy_int_dateoutcomes <- ymd(NOM_patients$appy_int_dateoutcomes)
 
 
 #creating variable that is time in days from NOM decision to appy
@@ -100,6 +97,7 @@ library(mstate)
 NOM_patients$event <- factor(NOM_patients$status365, 0:2, c("Censored", "Elective", "Urgent/Emergent"))
 fit <- survfit(Surv(time_to_event, event) ~1, data = NOM_patients)
 #fit$transitions
+
 par(mar = c(5, 4, 5, 8), xpd = NA)
 
 plot(
@@ -123,6 +121,58 @@ legend(
   bty = "n"
 )
 
+#add line for All appendectomy
+# Extract summary
+s <- summary(fit)
+
+
+time_vals <- s$time
+
+# Extract each transition probability
+elective_ci <- s$pstate[, "Elective"]
+urgent_ci   <- s$pstate[, "Urgent/Emergent"]
+
+# Compute total appendectomy
+all_ci <- elective_ci + urgent_ci
+
+
+par(mar = c(5, 4, 5, 8), xpd = NA)
+
+
+plot(
+  fit,
+  fun = "event",
+  xlim = c(0, 365),
+  ylim = c(0, 0.5),
+  col = c("#1f77b4", "#d62728"),
+  lwd = 3,
+  lty = 1,
+  xlab = "Days After Index Treatment with Antibiotics",
+  ylab = "Cumulative Incidence of Appendectomy",
+  main = "Risk of Appendectomy After NOTA",
+  mark.time = FALSE,
+  conf.int = FALSE
+)
+
+# Add total appendectomy curve
+lines(
+  time_vals,
+  all_ci,
+  col = "black",
+  lwd = 3,
+  lty = 2
+)
+
+
+legend(
+  "right",
+  inset = c(-0.31, 0),
+  legend = c("Elective", "Urgent", "All"),
+  col = c("#1f77b4", "#d62728", "black"),
+  lwd = 2,
+  lty = c(1, 1, 1),
+  bty = "n",
+)
 
 ```
 
@@ -154,11 +204,11 @@ NOM_patients$ED_status <- ifelse(
   NOM_patients$ed_return_365outcomes
 )
 
+#if reason for ED visit is 1 (cont. or worsening physical symptoms) or 2 (recurrence of symptoms) then it still equals 1, else 0
 NOM_patients$ED_status <- ifelse(
-  NOM_patients$ed_reasonoutcomes == 3 | NOM_patients$ed_reasonoutcomes == 4, 
-  0, 
-  NOM_patients$ED_status
-)
+  NOM_patients$ED_status == 1 & (NOM_patients$ed_reasonoutcomes == 1 | NOM_patients$ed_reasonoutcomes == 2),
+  1, 
+  0)
 
 table(NOM_patients$ED_status)
 
@@ -171,9 +221,9 @@ table(NOM_patients$ED_status)
 km_fit <- survfit(Surv(time_to_ED, ED_status) ~ 1, data = NOM_patients, conf.type = "log-log")
 
 ggsurvplot(km_fit, data = NOM_patients, conf.int = T, ggtheme = theme_survminer(),
-           title = "Kaplan-Meier Survival Curve", xlab = "Days since NOM", ylab = "ED Visit Probability", palette = "blue")
+           title = "Likelihood of Avoiding Emergency Care 1 Year Post-NOM", xlab = "Days since NOM", ylab = "Overall Probability", palette = "blue")
 
 na_fit <- survfit(Surv(time_to_ED, ED_status) ~ 1, data = NOM_patients, conf.type = "log-log") 
-ggsurvplot(na_fit, fun = "cumhaz",  title = "Cumulative Hazard", xlab = "Days since NOM", ylab = "Hazard Rate",)
+ggsurvplot(na_fit, fun = "cumhaz",  title = "Cumulative Hazard Function 1 Year Post-NOM", xlab = "Days since NOM", ylab = "Cumulative Hazard Rate",)
 
 ```

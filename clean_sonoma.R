@@ -7,7 +7,7 @@
 # Put your path to the SONOMA csv here 
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_raw.csv)
 #Bre: "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim0.csv"
-data_path = "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim2.csv"
+data_path = "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim3.csv"
 
 # Put your path to where you want to save the cleaned data 
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_cleaned.csv)
@@ -282,9 +282,74 @@ clean_s$appendicolithoutcomes <- ifelse(
   0
 )
 
+#additional factors
+clean_s <- clean_s %>% mutate(plan = factor(initial_planoutcomes, levels = c(1, 2), labels = c("Appendectomy", "NOM")),
+                            complicated_in_or = case_when(
+                              or_upgradeoutcomes == 0 ~ "No Upgrade",
+                              or_upgradeoutcomes > 0 ~ "Complicated/Possible Complicated Appendicitis in OR",
+                              TRUE ~ NA),
+                            more_than_minimal = case_when(
+                              ct_fluidoutcomes > 1 | us_fluidoutcomes > 1 ~ TRUE,
+                              TRUE ~ FALSE),
+                            minimal_or_more = case_when(
+                              ct_fluidoutcomes >= 1 | us_fluidoutcomes >= 1 ~ TRUE,
+                              TRUE ~ FALSE),
+                            coda_site_nw = case_when(
+                              site_name == "Atrium Health" | site_name == "Grady Health System" | site_name == "Northwest Hospital-University of Washington" ~ FALSE,
+                              TRUE ~ TRUE),
+                            coda_site = case_when(
+                              site_name == "Atrium Health" | site_name == "Grady Health System" ~ FALSE,
+                              TRUE ~ TRUE),
+                            appy_tta = difftime(as.Date(clean_s$appy_dateoutcomes), as.Date(clean_s$firstdxoutcomes), units = 'days'),
+                            nom_tta = difftime(as.Date(clean_s$appy_int_dateoutcomes), as.Date(clean_s$firstdxoutcomes), units = 'days'),
+                            time_of_day = format(as.POSIXct(clean_s$time_of_dxoutcomes, format = "%Y-%m-%d %H:%M"), "%H:%M"),
+                            hour = hour(hm(time_of_day)),
+                            night = case_when(
+                              hour >= 18 | hour < 6 ~ TRUE,
+                              hour < 18 & hour >= 6 ~ FALSE),
+                            preference = case_when(
+                              surg_teamoutcomes == 1 ~ "Antibiotics",
+                              surg_teamoutcomes == 2 ~ "Appendectomy",
+                              surg_teamoutcomes == 0 | surg_teamoutcomes == 3 ~ "No/Unclear Preference"),
+                            symptom_driven_appy = case_when(
+                              reason_electiveoutcomes___1 == 1 | reason_electiveoutcomes___2 == 1 | 
+                                reason_urgentoutcomes___1 == 1 | reason_urgentoutcomes___2 == 1 ~ TRUE,
+                              TRUE ~ FALSE),
+                            symptom_driven_appy_nom = case_when(
+                              symptom_driven_appy == TRUE & nom_appyoutcomes == TRUE ~ TRUE,
+                              symptom_driven_appy == FALSE & nom_appyoutcomes == TRUE ~ FALSE,
+                              TRUE ~ NA),
+                            ed_reasonoutcomes_f = case_when(
+                              ed_reasonoutcomes <= 2 ~ "Recurrent/Continued Appendicitis",
+                              TRUE ~ "Other Reasons"),
+                            early = case_when(
+                              nom_tta <= 30 ~ TRUE,
+                              TRUE ~ FALSE),
+                            mid = case_when(
+                              nom_tta <= 90 ~ TRUE,
+                              TRUE ~ FALSE),
+                            largest_size = pmax(appy_sizeoutcomes, us_diameteroutcomes, na.rm = TRUE),
+                            any_lith = case_when(
+                              appendicolithoutcomes == 1 | us_lithoutcomes == 1 ~ TRUE,
+                              TRUE ~ FALSE),
+                            male = Sex == 'Male',
+                            symptoms = as.numeric(symptomsoutcomes),
+                            nlr = as.numeric(nlroutcomes),
+                            wbc = as.numeric(wbcoutcomes),
+                            bmi = as.numeric(bmioutcomes),
+                            nlr_range = case_when(
+                              nlr < 5 ~ "0-5",
+                              nlr >= 5 & nlr < 10 ~ "5-10",
+                              nlr >= 10 & nlr < 20 ~ "10-20",
+                              nlr >= 20 ~ "20+",
+                              TRUE ~ NA),
+                            low_nlr = nlr <= 10)
+
+
+
 ###Relocates new columns to front
 clean_s <- clean_s %>%
-  relocate(ï..ID, 
+  relocate(ï..record_id, 
            Race, Sex, 
            Ethnicity, 
            RaceEthnicity,
@@ -302,7 +367,7 @@ clean_s <- clean_s %>%
 
 
 clean_s <- clean_s %>%
-  rename(RecordID = ï..ID )
+  rename(RecordID = ï..record_id )
 
 #### SAVE ####
 

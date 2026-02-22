@@ -1,5 +1,5 @@
 ---
-title: "eda NOM"
+title: "Exploratory Analysis of NOM Selection"
 author: "AnkeLi"
 date: "`r Sys.Date()`"
 output: html_document
@@ -13,6 +13,112 @@ data_path = ""
 clean_s = read.csv(data_path, check.names = FALSE, row.names=1) 
 
 # colnames(clean_s)
+```
+
+
+# Proposed covariates in multivariate logistic/multinomial
+
+According to codebook:
+
+-   age, continuous | `Age_Categories` (type conflict)
+-   sex, binary | `Sex`
+-   race, categorical | `Race`
+-   hispanic ethnicity, binary | `Ethnicity`
+-   english as second language, binary | mostly missing
+-   charlson score, continuous | `ccioutcomes`
+-   appendiceal diameter, continuous | `appy_sizeoutcomes`
+-   appendicolith, binary | `appendicolithoutcomes` (1/0/2 = Yes/No/Notmentioned)
+-   WBC or NLR, continuous | `wbcoutcomes`, `nlroutcomes`
+
+```{r}
+
+#table showing counts of eligible patients that received appendectomy (1) vs NOM (2)
+table(clean_s$initial_planoutcomes)
+#about 23% of eligible participants chose NOM
+
+#table of NOM vs Appy by RaceEthnicity
+table(clean_s$initial_planoutcomes, clean_s$RaceEthnicity)
+
+#table of NOM vs Appy by Sex
+table(clean_s$initial_planoutcomes, clean_s$Sex) #pretty even
+
+#table of NOM vs Appy by Age
+table(clean_s$initial_planoutcomes, clean_s$Age_Categories)
+
+
+
+vars <- c("Age_Categories", "Sex", "Ethnicity", "appendicolithoutcomes", "ccioutcomes", "RaceEthnicity")
+
+for (var in vars){
+x <- clean_s[[var]]
+
+tab <- table(x, useNA = "ifany")
+pct <- 100 * tab / sum(tab)
+lab <- paste0("Counts/frequency: ",
+              paste(sprintf("%s (%d, %.1f%%)", names(tab), as.integer(tab), as.numeric(pct)),
+                    collapse = ", "))
+
+barplot(tab, main = var, sub = lab, las = 2)
+}
+
+#table of counts of Race/Ethnicity
+table(clean_s$RaceEthnicity)
+#RESULTS: less than 30 in AI/AN, Asian Indian, and NHPI. Will need to collapse these columns -> probably just add to other/not specified
+
+#table of counts of age ranges
+table(clean_s$Age_Categories)
+# RESULTS: all categories have >30 individuals, though unbalanced as 65-74 and 75+ are way lower than other categories. Should we put them together? Maybe better to just keep continuous in the model, but show categories for descriptive data
+
+#table of counts of ESL
+table(clean_s$ESL)
+table(clean_s$primary_language)
+#RESULT: would be more balanced if we used ESL indicator, but worth noting in results that majority of "Other" were spanish speakers. 
+
+
+
+```
+```{r}
+# ccioutcomes is better interpret in histogram i think?
+vars <- c("ccioutcomes","appy_sizeoutcomes","wbcoutcomes","nlroutcomes")  # continuous
+
+for (v in vars) {
+  x <- clean_s[[v]]
+  x = as.numeric(x)
+  x <- x[is.finite(x)]
+  op <- par(oma=c(2,0,0,0))  
+  boxplot(x, main=v, ylab=v, horizontal=TRUE)
+  mtext(sprintf("mean=%.2f  median=%.2f  Q1=%.2f  Q3=%.2f  min=%.2f  max=%.2f",
+                mean(x), median(x),
+                unname(quantile(x,.25)), unname(quantile(x,.75)),
+                min(x), max(x)),
+        side=1, line=.2, cex=.9, outer=TRUE)
+   par(op)
+}
+
+
+
+```
+
+# NOM with covariates
+
+`nom_appyoutcomes`
+```{r}
+# barplot(clean_s$nom_appyoutcomes)
+
+
+
+x <- clean_s[["nom_appyoutcomes"]]
+
+tab <- table(x, useNA = "ifany")
+pct <- 100 * tab / sum(tab)
+lab <- paste0("Counts/frequency: ",
+              paste(sprintf("%s (%d, %.1f%%)", names(tab), as.integer(tab), as.numeric(pct)),
+                    collapse = ", "))
+
+barplot(tab, main = var, sub = lab, las = 2)
+
+
+
 ```
 
 

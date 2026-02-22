@@ -1,3 +1,7 @@
+#merged these changes into clean_sonoma.R file - Bre feb 21
+
+
+
 #execute on cleaned sonoma file
 #rm(list = ls())
 #data handling

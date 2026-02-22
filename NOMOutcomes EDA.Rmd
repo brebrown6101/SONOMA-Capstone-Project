@@ -11,6 +11,7 @@ date: "2026-01-25"
 knitr::opts_chunk$set(echo = TRUE)
 library(lubridate)
 library(ggplot2)
+library(nnet)
 ```
 
 ```{r, echo = FALSE, message = FALSE}
@@ -96,6 +97,8 @@ NOM_patients$appendicolithoutcomes <- factor(NOM_patients$appendicolithoutcomes,
 RaceEthnicity has the most categories out of our potential covariates. When cross-tabulating these categories against post-NOM appendectomy status, there are many sparse or empty cells. If we were to use RaceEthnicity in a multivariate model, we would have to collapse some categories to prevent quasi-complete separation. Due to the sparseness, Fisher's exact test was used to test for an association. A p-value of 0.4608 indicates there is not a statistically significant relationship between Race/Ethnicity and post-NOM appendectomy status.
 ```{r, echo = FALSE}
 
+library(ggstatsplot)
+
 #Crosstable of RaceEthnicity by Status
 CrossTable(NOM_patients$RaceEthnicity, NOM_patients$status365)
 
@@ -148,12 +151,14 @@ ggplot(data = NOM_patients, aes(x = ageoutcomes, y = status365)) +
   labs(y = "1 Year Post NOM Appendectomy Status", x = "Age")
 
 
+
 anova_model <- aov(ageoutcomes ~ status365, data = NOM_patients)
 summary(anova_model)
 #not significant
 
 
-#WBC Count and NLR 
+#WBC Count and NLR - checking correlation and modeling assumptions
+
 
 #count of how many NOM patients have NLR recorded: 
 NOM_patients$nlroutcomes[
@@ -180,6 +185,8 @@ ggplot(data = NOM_patients, aes(x = nlroutcomes, y = status365)) +
 anova_model5 <- aov(nlroutcomes ~ status365, data = NOM_patients)
 summary(anova_model5)
 #Not significant
+
+cor.test(NOM_patients$wbcoutcomes, NOM_patients$nlroutcomes)
 
 
 
@@ -234,6 +241,14 @@ ggbarstats( #completes chi-squared p-val and graphs
   bf.message = FALSE, 
    xlab = "1 Year Post-NOM Appendectomy Status"
 )
+
+
+
+#Checking site
+NOM_patients$sitesite_abstractor <- as.factor(NOM_patients$sitesite_abstractor)
+CrossTable(NOM_patients$sitesite_abstractor, NOM_patients$status365)
+cont_table1 <- table(NOM_patients$status365, NOM_patients$sitesite_abstractor)
+fisher.test(cont_table1, workspace = 1e7, simulate.p.value = TRUE)
 
 ```
 
