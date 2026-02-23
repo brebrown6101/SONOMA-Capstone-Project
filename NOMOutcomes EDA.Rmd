@@ -205,7 +205,7 @@ ggbarstats( #completes chi-squared p-val and graphs
    legend.title = "CCI Score", 
   xlab = "1 Year Post-NOM Appendectomy Status"
 )
-fisher.test(contingency_table, workspace = 1e7)
+
 
 
 #fisher test shows no association b/w CCI and either elective/urgent appendectomy
@@ -217,6 +217,10 @@ ggplot(data = NOM_patients, aes(x = appy_sizeoutcomes, y = status365)) +
 anova_model3 <- aov(appy_sizeoutcomes ~ status365, data = NOM_patients)
 summary(anova_model3)
 #92/354 missing appendix size at index
+
+#checking missingness: 
+count_non_missing2 <- length(NOM_patients$appy_sizeoutcomes[!is.na(NOM_patients$appy_sizeoutcomes)])
+print(count_non_missing2)
 
 
 #Testing association of appendicolith and status
@@ -251,4 +255,4 @@ cont_table1 <- table(NOM_patients$status365, NOM_patients$sitesite_abstractor)
 fisher.test(cont_table1, workspace = 1e7, simulate.p.value = TRUE)
 
 ```
-
+Table of NOM outcomes by Site (rates of elective, urgent, none)

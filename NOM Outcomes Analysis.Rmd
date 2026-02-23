@@ -1,0 +1,117 @@
+---
+title: "NOM Subset Analysis"
+output: html_document
+date: "2026-01-25"
+---
+
+
+#Data Set Up - Creating NOM patients only subset
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+data_path = "C:/Bre/SONOMA/Sonoma_cleaned.csv"
+
+clean_s = read.csv(data_path, check.names = FALSE, row.names=1) 
+
+#subsetting data to just NOM patients
+NOM_patients <- clean_s[clean_s$initial_planoutcomes == 2,] 
+
+NOM_patients <- NOM_patients[!is.na(NOM_patients$time_of_dxoutcomes),] #removing NA values for date/time of patients dx of appendicitis
+#sum(is.na(NOM_patients$time_of_dxoutcomes)) #looking for NAs
+NOM_patients$time_of_dxoutcomes <- gsub(" .*","", NOM_patients$time_of_dxoutcomes) #removing time part of date/time
+#sum(is.na(NOM_patients$time_of_dxoutcomes)) #checking for NAs again
+
+#converting date_index to date object
+
+
+NOM_patients$time_of_dxoutcomes <- ymd(NOM_patients$time_of_dxoutcomes)
+
+
+#converting date of appendectomy after NOM to date object, converting blanks to NAs
+NOM_patients$appy_int_dateoutcomes[
+  NOM_patients$appy_int_dateoutcomes == ""
+] <- NA
+
+NOM_patients$appy_int_dateoutcomes <- ymd(NOM_patients$appy_int_dateoutcomes)
+
+
+#creating variable that is time in days from NOM decision to appy
+NOM_patients$time_to_appy <- NOM_patients$appy_int_dateoutcomes - NOM_patients$time_of_dxoutcomes
+#I thought they were only followed for a year after, but many of these times look way past 365 days so what time for censored individuals?
+
+#DONT NEED THIS IF WE GET NEW TIMES FOR TWO ERRORS
+NOM_patients <- NOM_patients[NOM_patients$time_to_appy > 0 | is.na(NOM_patients$time_to_appy), ] #DONT NEED THIS IF WE GET NEW TIMES
+
+
+#setting NA values to 0 for censored, creating status variable for survival
+NOM_patients$status <- ifelse(
+  is.na(NOM_patients$interval_typeoutcomes),
+  0,   # censored
+  NOM_patients$interval_typeoutcomes
+)
+
+
+
+NOM_patients$status <- as.numeric(NOM_patients$status)
+
+
+
+#creating time_to_event for all NOM patients, making it 365 for censored individuals
+NOM_patients$time_to_event <- ifelse(
+  is.na(NOM_patients$time_to_appy),
+  365,
+  NOM_patients$time_to_appy
+)
+#administratively censoring those beyond 1 year
+NOM_patients$status365 <- ifelse(
+  NOM_patients$time_to_event > 365, 
+  0, #administratively censored beyond 1 year
+  NOM_patients$status
+)
+
+#changing time to event to 365 days for censored beyond 1 year individuals
+NOM_patients$time_to_event <- ifelse(
+  NOM_patients$status365 == 0, 
+  365, 
+  NOM_patients$time_to_event
+)
+
+NOM_patients$any_appy <- ifelse(NOM_patients$status365 != 0, 1, 0)
+
+
+
+```
+
+
+#Calculating Intraclass Coefficient Correlation for site level variation 
+```{r}
+library(lme4)
+library(performance)
+
+#creating mixed effects model with just site as variable, 
+
+#model 1 - elective, urgent, none in 1 year post NOM as outcome
+model <- lmer(status365 ~ 1 + (1 | sitesite_abstractor), data = NOM_patients)
+#model 2 - appy or no appy in 1 year post NOM as outcome
+model2 <- lmer(any_appy ~ 1 + (1 | sitesite_abstractor), data = NOM_patients)
+
+#icc value for model 1
+icc_value <- icc(model)
+print(icc_value)
+
+#icc value for model 2
+icc_value2 <- icc(model)
+print(icc_value2)
+```
+
+#Rates of Elective and Urgent appy after NOM by site
+```{r}
+library(DescTools)
+NOM_patients$status365 <- factor(NOM_patients$status365, 0:2, c("None", "Elective", "Urgent/Emergent"))
+
+appy_by_site <- table(NOM_patients$site_name, NOM_patients$status365)
+appy_by_site
+PercTable(site_name ~ status365, data=NOM_patients, rfrq="110", margins=c(1,2))
+
+
+
+
+```

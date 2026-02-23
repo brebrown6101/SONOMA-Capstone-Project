@@ -14,6 +14,7 @@ library(ggplot2)
 library(dplyr)
 library(lubridate)
 library(ggsurvfit)
+library(tidycmprsk)
 ```
 
 #Data Set Up
@@ -87,11 +88,12 @@ NOM_patients$time_to_event <- ifelse(
 
 NOM_patients$status <- factor(NOM_patients$status, 0:2, c("None", "Elective", "Urgent/Emergent"))
 
+NOM_patients$any_appy <- ifelse(NOM_patients$status365 != 0, 1, 0)
+
 ```
 
 ## Aalen Johansen Estimator of competing risk of urgent vs elective appendectomy
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
-
 
 library(mstate)
 NOM_patients$event <- factor(NOM_patients$status365, 0:2, c("Censored", "Elective", "Urgent/Emergent"))
@@ -173,6 +175,35 @@ legend(
   lty = c(1, 1, 1),
   bty = "n",
 )
+
+overall_surv_fit <- survfit(Surv(time_to_event, any_appy) ~ 1, data = NOM_patients)
+
+overall_data <- data.frame(
+  time = overall_surv_fit$time,
+  overall_incidence = 1 - overall_surv_fit$surv, 
+  lower = 1 - overall_surv_fit$upper, 
+  upper = 1 - overall_surv_fit$lower, 
+  outcome = "Any"
+)
+comprisk <- ci_fit %>%
+  ggcuminc(outcome = c("Elective", "Urgent/Emergent")) +
+    add_confidence_interval(alpha = 0.25, size = 0.6) +
+  aes(color = outcome, fill = outcome) +
+  scale_color_manual(values = c("Elective"  = "#1f77b4", "Urgent/Emergent" = "#d62728", "Any" = "black")) +
+  scale_fill_manual(values = c("Elective"  = "#1f77b4", "Urgent/Emergent" = "#d62728", "Any" = "black")) +
+  theme_classic() + # Professional theme
+  labs(
+    x = "Days post-transplant",
+    y = "Cumulative Incidence of Relapse"
+  ) +
+  theme(text = element_text(size = 12)) # Clean, readable text
+
+comprisk
+
+
+comprisk + geom_ribbon( data = overall_data, aes(x = time, ymin = lower, ymax = upper, fill = outcome), alpha = 0.2, inherit.aes = FALSE ) + geom_step( data = overall_data, aes(x = time, y = overall_incidence, color = outcome), linetype = "dashed", linewidth = 0.9, inherit.aes = FALSE )
+
+
 
 ```
 
