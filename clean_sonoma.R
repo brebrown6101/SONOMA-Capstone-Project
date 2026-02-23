@@ -7,12 +7,11 @@
 # Put your path to the SONOMA csv here 
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_raw.csv)
 #Bre: "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim0.csv"
-data_path = "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim3.csv"
-
+data_path = 
 # Put your path to where you want to save the cleaned data 
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_cleaned.csv)
 #Bre: "C:/Bre/SONOMA/Sonoma_cleaned.csv"
-output_path = "C:/Bre/SONOMA/Sonoma_cleaned.csv"
+output_path = 
 
 
 
@@ -334,7 +333,8 @@ clean_s <- clean_s %>% mutate(plan = factor(initial_planoutcomes, levels = c(1, 
                               TRUE ~ FALSE),
                             male = Sex == 'Male',
                             symptoms = as.numeric(symptomsoutcomes),
-                            nlr = as.numeric(nlroutcomes),
+                            #nlr = as.numeric(nlroutcomes), change to 
+                            nlr = readr::parse_number(stringr::str_replace(nlroutcomes, ",", ".")),
                             wbc = as.numeric(wbcoutcomes),
                             bmi = as.numeric(bmioutcomes),
                             nlr_range = case_when(
@@ -349,7 +349,7 @@ clean_s <- clean_s %>% mutate(plan = factor(initial_planoutcomes, levels = c(1, 
 
 ###Relocates new columns to front
 clean_s <- clean_s %>%
-  relocate(ï..record_id, 
+  relocate(record_id, 
            Race, Sex, 
            Ethnicity, 
            RaceEthnicity,
@@ -367,7 +367,7 @@ clean_s <- clean_s %>%
 
 
 clean_s <- clean_s %>%
-  rename(RecordID = ï..record_id )
+  rename(RecordID = record_id )
 
 #### SAVE ####
 
