@@ -15,6 +15,7 @@ library(dplyr)
 library(lubridate)
 library(ggsurvfit)
 library(tidycmprsk)
+library(tidyr)
 ```
 
 #Data Set Up
@@ -86,122 +87,80 @@ NOM_patients$time_to_event <- ifelse(
   NOM_patients$time_to_event
 )
 
+# Urgent indicator
+NOM_patients$urgent_event <- ifelse(NOM_patients$status365 == 2, 1, 0)
+
+# Elective indicator
+NOM_patients$elective_event <- ifelse(NOM_patients$status365 == 1, 1, 0)
+
+
+# Urgent time: if urgent happened, keep time; else censor at observed time
+NOM_patients$urgent_time <- ifelse(NOM_patients$urgent_event == 1,
+                                   NOM_patients$time_to_event,
+                                   NOM_patients$time_to_event)
+
+# Elective time: if elective happened, keep time; else censor at observed time
+NOM_patients$elective_time <- ifelse(NOM_patients$elective_event == 1,
+                                     NOM_patients$time_to_event,
+                                     NOM_patients$time_to_event)
+
 NOM_patients$status <- factor(NOM_patients$status, 0:2, c("None", "Elective", "Urgent/Emergent"))
 
 NOM_patients$any_appy <- ifelse(NOM_patients$status365 != 0, 1, 0)
 
 ```
 
-## Aalen Johansen Estimator of competing risk of urgent vs elective appendectomy
-```{r, echo = FALSE, message = FALSE, warning = FALSE}
+Time to Urgent, Elective, and OVerall Appendectomy
+```{r}
 
-library(mstate)
-NOM_patients$event <- factor(NOM_patients$status365, 0:2, c("Censored", "Elective", "Urgent/Emergent"))
-fit <- survfit(Surv(time_to_event, event) ~1, data = NOM_patients)
-#fit$transitions
+library(ggsurvfit)
+library(broom)
+library(ggplot2)
 
-par(mar = c(5, 4, 5, 8), xpd = NA)
+#survival curves for each type
+urgent_appy <- survfit2(Surv(time_to_event, urgent_event) ~ 1, data = NOM_patients)
+elective_appy <- survfit2(Surv(time_to_event, elective_event) ~ 1, data = NOM_patients)
+all_appy <- survfit2(Surv(time_to_event, any_appy) ~ 1, data = NOM_patients)
 
-plot(
-  fit,
-  xmax = 1200,
-  ymax = 800,
-  col = 1:2,
-  lwd = 2,
-  xlab = "Days since NOM",
-  ylab = "Probability", 
-  main = "Probability of Appendectomy by 1 Year Post-NOM"
-)
+urgent_df <- broom::tidy(urgent_appy)
+elective_df <- broom::tidy(elective_appy)
+all_df <- broom::tidy(all_appy)
 
-legend(
-  "right",
-  inset = c(-0.31, 0),
-  legend = c("Elective", "Emergent"),
-  lty = 1,
-  lwd = 2,
-  col = 1:2,
-  bty = "n"
-)
+#overall cumulative risk plot
+plot_all <- ggsurvfit(all_appy, type = "risk") +
+  labs(x = "Days After Index Treatment with Antibiotics",
+       y = "Risk of Appendectomy",
+       title = "Risk of Appendectomy After NOTA") +
+  scale_x_continuous(breaks = c(0, 30, 90, 180, 270, 365)) +
+  ylim(0, 0.5) +
+  add_confidence_interval(fill = "black", alpha = 0.3)
+plot_all
 
-#add line for All appendectomy
-# Extract summary
-s <- summary(fit)
+# Add elective + urgent risks
+plot_combined <- plot_all +
+  geom_step(data = urgent_df, aes(x = time, y = 1 - estimate, color = "Urgent", linetype = "Urgent"), size = 0.6) +
+  geom_step(data = elective_df, aes(x = time, y = 1 - estimate, color = "Elective", linetype = "Elective"), size = 0.6) +
+  geom_step(data = all_df, aes(x = time, y = 1 - estimate, color = "Overall", linetype = "Overall"), size = 0.6) +
 
+  geom_ribbon(data = urgent_df,
+              aes(x = time, ymin = 1 - conf.high, ymax = 1 - conf.low),
+              fill = "#d62728", alpha = 0.3) +
+  geom_ribbon(data = elective_df,
+              aes(x = time, ymin = 1 - conf.high, ymax = 1 - conf.low),
+              fill = "#1f77b4", alpha = 0.3) +
 
-time_vals <- s$time
+  scale_color_manual(values = c("Elective" = "#1f77b4",
+                                "Urgent" = "#d62728",
+                                "Overall" = "black")) +
+  scale_linetype_manual(values = c("Elective" = "dashed",
+                                   "Urgent" = "twodash",
+                                   "Overall" = "solid")) +  
+  theme_classic() +
+  labs(color = "Appendectomy Type", linetype = "Appendectomy Type")
 
-# Extract each transition probability
-elective_ci <- s$pstate[, "Elective"]
-urgent_ci   <- s$pstate[, "Urgent/Emergent"]
+print(plot_combined)
 
-# Compute total appendectomy
-all_ci <- elective_ci + urgent_ci
-
-
-par(mar = c(5, 4, 5, 8), xpd = NA)
-
-
-plot(
-  fit,
-  fun = "event",
-  xlim = c(0, 365),
-  ylim = c(0, 0.5),
-  col = c("#1f77b4", "#d62728"),
-  lwd = 3,
-  lty = 1,
-  xlab = "Days After Index Treatment with Antibiotics",
-  ylab = "Cumulative Incidence of Appendectomy",
-  main = "Risk of Appendectomy After NOTA",
-  mark.time = FALSE,
-  conf.int = FALSE
-)
-
-# Add total appendectomy curve
-lines(
-  time_vals,
-  all_ci,
-  col = "black",
-  lwd = 3,
-  lty = 2
-)
-
-
-legend(
-  "right",
-  inset = c(-0.31, 0),
-  legend = c("Elective", "Urgent", "All"),
-  col = c("#1f77b4", "#d62728", "black"),
-  lwd = 2,
-  lty = c(1, 1, 1),
-  bty = "n",
-)
-
-overall_surv_fit <- survfit(Surv(time_to_event, any_appy) ~ 1, data = NOM_patients)
-
-overall_data <- data.frame(
-  time = overall_surv_fit$time,
-  overall_incidence = 1 - overall_surv_fit$surv, 
-  lower = 1 - overall_surv_fit$upper, 
-  upper = 1 - overall_surv_fit$lower, 
-  outcome = "Any"
-)
-comprisk <- ci_fit %>%
-  ggcuminc(outcome = c("Elective", "Urgent/Emergent")) +
-    add_confidence_interval(alpha = 0.25, size = 0.6) +
-  aes(color = outcome, fill = outcome) +
-  scale_color_manual(values = c("Elective"  = "#1f77b4", "Urgent/Emergent" = "#d62728", "Any" = "black")) +
-  scale_fill_manual(values = c("Elective"  = "#1f77b4", "Urgent/Emergent" = "#d62728", "Any" = "black")) +
-  theme_classic() + # Professional theme
-  labs(
-    x = "Days post-transplant",
-    y = "Cumulative Incidence of Relapse"
-  ) +
-  theme(text = element_text(size = 12)) # Clean, readable text
-
-comprisk
-
-
-comprisk + geom_ribbon( data = overall_data, aes(x = time, ymin = lower, ymax = upper, fill = outcome), alpha = 0.2, inherit.aes = FALSE ) + geom_step( data = overall_data, aes(x = time, y = overall_incidence, color = outcome), linetype = "dashed", linewidth = 0.9, inherit.aes = FALSE )
+```
 
 
 
@@ -242,6 +201,8 @@ NOM_patients$ED_status <- ifelse(
   0)
 
 table(NOM_patients$ED_status)
+
+table(NOM_patients$ED_status, NOM_patients$status365)
 
 
 #Should we show percentage of those who came back w/ symptoms but didn't get appendectomy?
