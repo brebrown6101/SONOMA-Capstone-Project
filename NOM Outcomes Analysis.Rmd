@@ -3,7 +3,12 @@ title: "NOM Subset Analysis"
 output: html_document
 date: "2026-01-25"
 ---
+```{r}
+library(gt)
 
+
+
+```
 
 #Data Set Up - Creating NOM patients only subset
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
@@ -75,32 +80,9 @@ NOM_patients$time_to_event <- ifelse(
 )
 
 NOM_patients$any_appy <- ifelse(NOM_patients$status365 != 0, 1, 0)
-
-
-
 ```
 
 
-#Calculating Intraclass Coefficient Correlation for site level variation 
-```{r}
-library(lme4)
-library(performance)
-
-#creating mixed effects model with just site as variable, 
-
-#model 1 - elective, urgent, none in 1 year post NOM as outcome
-model <- lmer(status365 ~ 1 + (1 | sitesite_abstractor), data = NOM_patients)
-#model 2 - appy or no appy in 1 year post NOM as outcome
-model2 <- lmer(any_appy ~ 1 + (1 | sitesite_abstractor), data = NOM_patients)
-
-#icc value for model 1
-icc_value <- icc(model)
-print(icc_value)
-
-#icc value for model 2
-icc_value2 <- icc(model)
-print(icc_value2)
-```
 
 #Rates of Elective and Urgent appy after NOM by site
 ```{r}
@@ -109,9 +91,77 @@ NOM_patients$status365 <- factor(NOM_patients$status365, 0:2, c("None", "Electiv
 
 appy_by_site <- table(NOM_patients$site_name, NOM_patients$status365)
 appy_by_site
-PercTable(site_name ~ status365, data=NOM_patients, rfrq="110", margins=c(1,2))
 
 
+site_counts <- as.data.frame.matrix(appy_by_site) %>%
+  tibble::rownames_to_column("site_name")
+
+# Build gt table
+gt(site_counts) %>%
+  tab_header(
+    title = "Appendectomy Status by Site",
+    subtitle = "Counts of 365-day Status Categories"
+  ) %>%
+  fmt_number(
+    columns = -site_name,
+    decimals = 0
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels(everything())
+  )
+
+
+
+
+
+#relative percentages of elective, urgent, none for each site
+percentages <- PercTable(site_name ~ status365, data=NOM_patients, rfrq="010")
+percentages
+
+
+percent_df <- NOM_patients %>%
+  count(site_name, status365) %>%
+  group_by(site_name) %>%
+  mutate(Percentage = n / sum(n)) %>%
+  ungroup() %>%
+  select(-n) %>%
+  pivot_wider(
+    names_from = status365,
+    values_from = Percentage
+  )
+
+
+percent_df %>%
+  gt(rowname_col = "site_name") %>%
+  tab_header(
+    title = "Appendectomy Type by Site"
+  ) %>%
+  fmt_percent(
+    columns = -site_name,
+    decimals = 1
+  ) %>%
+  cols_label(
+    site_name = "Appendectomy Type"
+  )
+
+
+percent_df <- NOM_patients %>%
+  count(site_name, status365) %>%
+  group_by(site_name) %>%
+  mutate(
+    pct = n / sum(n),
+    display = paste0(n, " (", scales::percent(pct, accuracy = 0.1), ")")
+  ) %>%
+  ungroup() %>%
+  select(site_name, status365, display) %>%
+  pivot_wider(
+    names_from = status365,
+    values_from = display
+  ) %>%
+  rename(Site = site_name)
+
+percent_df
 
 
 ```

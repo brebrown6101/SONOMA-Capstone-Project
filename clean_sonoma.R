@@ -7,11 +7,11 @@
 # Put your path to the SONOMA csv here 
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_raw.csv)
 #Bre: "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim0.csv"
-data_path = 
+data_path = "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim3.csv"
 # Put your path to where you want to save the cleaned data 
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_cleaned.csv)
 #Bre: "C:/Bre/SONOMA/Sonoma_cleaned.csv"
-output_path = 
+output_path = "C:/Bre/SONOMA/Sonoma_cleaned.csv"
 
 
 
@@ -346,10 +346,14 @@ clean_s <- clean_s %>% mutate(plan = factor(initial_planoutcomes, levels = c(1, 
                             low_nlr = nlr <= 10)
 
 
+clean_s <- clean_s %>%
+  rename(RecordID = ï..record_id) #when I download a new dataset, it switches record_id to this for some reason - 
+#please comment out if it doesn't reply, and also change rename to correct record id indicator to make it easier to switch
+
 
 ###Relocates new columns to front
 clean_s <- clean_s %>%
-  relocate(record_id, 
+  relocate(RecordID, 
            Race, Sex, 
            Ethnicity, 
            RaceEthnicity,
@@ -365,10 +369,7 @@ clean_s <- clean_s %>%
 
 
 
-
-clean_s <- clean_s %>%
-  rename(RecordID = record_id )
-
 #### SAVE ####
 
 write.csv(clean_s, output_path)
+
