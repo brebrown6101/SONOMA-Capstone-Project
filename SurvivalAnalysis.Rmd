@@ -180,8 +180,8 @@ stratified_fit <- survfit2(Surv(time_to_event, any_appy) ~ appendicolithoutcomes
 strat_df <- broom::tidy(stratified_fit)
 
 plot_strat <- ggsurvfit(stratified_fit, type = "risk") +
-  labs(x = "Days After Index Treatment with Antibiotics",
-       y = "Risk of Appendectomy",
+  labs(x = "Days Since Index Treatment with Antibiotics",
+       y = "Cumulative Incidence of Appendectomy",
        title = "Risk of Appendectomy After Antibiotics-First Treatment") +
   scale_x_continuous(breaks = c(0, 30, 90, 180, 270, 365))
 
@@ -197,11 +197,11 @@ plot_combined <- plot_strat +
     name = "Appendicolith Status",
     values = c(
       "0" = "#1f77b4",
-      "1" = "darkgreen",
-      "Overall" = "#d62728"
+      "1" = "#d62728",
+      "Overall" = "black"
     ), 
     labels = c(
-      "0" = "Not Present", 
+      "0" = "Absent", 
       "1" = "Present", 
       "Overall" = "Overall"
     )
@@ -209,9 +209,9 @@ plot_combined <- plot_strat +
 scale_y_continuous(limits = c(0, 0.5), label = scales::label_percent()) + 
   theme_classic() + 
   geom_point(aes(x = 30, y = 0.2)) +
-annotate("text", x = 30, y = 0.23, label = "30-Day CODA Rate:\n 20% (CI: 17-23)", size = 2.5) +
+annotate("text", x = 30, y = 0.25, label = "30-Day \n Overall CODA Rate:\n 20% [17-23]", size = 2.5) +
   geom_point(aes(x = 90, y = 0.29)) +
-annotate("text", x = 90, y = 0.33, label = "90-Day CODA Rate:\n 29% (CI: 26-32)", size = 2.5) 
+annotate("text", x = 90, y = 0.34, label = "90-Day \n Overall CODA Rate:\n 29% [26-32]", size = 2.5) 
 
 
 print(plot_combined)
