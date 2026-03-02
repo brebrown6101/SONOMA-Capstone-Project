@@ -87,6 +87,8 @@ NOM_patients$any_appy <- ifelse(NOM_patients$status365 != 0, 1, 0)
 #Rates of Elective and Urgent appy after NOM by site
 ```{r}
 library(DescTools)
+library(flextable)
+library(officer)
 NOM_patients$status365 <- factor(NOM_patients$status365, 0:2, c("None", "Elective", "Urgent/Emergent"))
 
 appy_by_site <- table(NOM_patients$site_name, NOM_patients$status365)
@@ -162,6 +164,13 @@ percent_df <- NOM_patients %>%
   rename(Site = site_name)
 
 percent_df
+
+ft <- flextable(percent_df) %>%
+  theme_vanilla() %>%
+  autofit()
+
+# Save the flextable as a PNG image
+save_as_image(ft, path = "percent_table.png")
 
 
 ```

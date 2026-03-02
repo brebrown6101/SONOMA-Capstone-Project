@@ -128,9 +128,9 @@ all_df <- broom::tidy(all_appy)
 
 #overall cumulative risk plot
 plot_all <- ggsurvfit(all_appy, type = "risk") +
-  labs(x = "Days After Index Treatment with Antibiotics",
-       y = "Risk of Appendectomy",
-       title = "Risk of Appendectomy After NOTA") +
+  labs(x = "Days Since Index Treatment with Antibiotics",
+       y = "Cumulative Incidence of Appendectomy",
+       title = "Risk of Appendectomy After Antibiotics-First Treatment") +
   scale_x_continuous(breaks = c(0, 30, 90, 180, 270, 365)) +
   ylim(0, 0.5) +
   add_confidence_interval(fill = "black", alpha = 0.3)
@@ -209,9 +209,9 @@ plot_combined <- plot_strat +
 scale_y_continuous(limits = c(0, 0.5), label = scales::label_percent()) + 
   theme_classic() + 
   geom_point(aes(x = 30, y = 0.2)) +
-annotate("text", x = 30, y = 0.25, label = "30-Day \n Overall CODA Rate:\n 20% [17-23]", size = 2.5) +
+annotate("text", x = 30, y = 0.23, label = "30-Day \n Overall CODA Rate:\n 20% [17-23]", size = 2.5) +
   geom_point(aes(x = 90, y = 0.29)) +
-annotate("text", x = 90, y = 0.34, label = "90-Day \n Overall CODA Rate:\n 29% [26-32]", size = 2.5) 
+annotate("text", x = 90, y = 0.325, label = "90-Day \n Overall CODA Rate:\n 29% [26-32]", size = 2.5) 
 
 
 print(plot_combined)
@@ -237,13 +237,12 @@ NOM_patients$ed_ret_dateoutcomes[
   NOM_patients$ed_ret_dateoutcomes == ""
 ] <- NA
 
-NOM_patients$ed_ret_dateoutcomes <- as.Date(
-  NOM_patients$ed_ret_dateoutcomes,
-  format = "%m/%d/%Y"
-)
+NOM_patients$ed_ret_dateoutcomes <- ymd(NOM_patients$ed_ret_dateoutcomes)
+
 
 #creating variable that is time in days from NOM decision to appy
 NOM_patients$time_to_EDsymptoms <- NOM_patients$ed_ret_dateoutcomes - NOM_patients$time_of_dxoutcomes
+
 
 
 NOM_patients$time_to_ED <- ifelse(
@@ -272,14 +271,29 @@ table(NOM_patients$ED_status, NOM_patients$status365)
 #Should we show percentage of those who came back w/ symptoms but didn't get appendectomy?
 ```
 
-#Kaplan Meier Plot of Time to Appendicitis symptoms
+#Plot of Time to Appendicitis symptoms
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
-km_fit <- survfit(Surv(time_to_ED, ED_status) ~ 1, data = NOM_patients, conf.type = "log-log")
+ed_fit <- survfit(Surv(time_to_ED, ED_status) ~ 1, data = NOM_patients, conf.type = "log-log")
 
-ggsurvplot(km_fit, data = NOM_patients, conf.int = T, ggtheme = theme_survminer(),
-           title = "Likelihood of Avoiding Emergency Care 1 Year Post-NOM", xlab = "Days since NOM", ylab = "Overall Probability", palette = "blue")
 
-na_fit <- survfit(Surv(time_to_ED, ED_status) ~ 1, data = NOM_patients, conf.type = "log-log") 
-ggsurvplot(na_fit, fun = "cumhaz",  title = "Cumulative Hazard Function 1 Year Post-NOM", xlab = "Days since NOM", ylab = "Cumulative Hazard Rate",)
+ed_plot <- ggsurvfit(ed_fit, type = "risk", color = "#d62728") +
+  labs(x = "Days Since Index Treatment with Antibiotics",
+       y = "Cumulative Incidence of Symptom-Driven ED Visit",
+       title = "Risk of Symptom-Driven ED Visit After Antibiotics-First Treatment") +
+  scale_x_continuous(breaks = c(0, 30, 90, 180, 270, 365)) +
+  ylim(0, 0.4) +
+  xlim(0, 365) +
+  add_confidence_interval(fill = "#d62728", alpha = 0.3) + 
+  theme_classic()
+
+ed_plot
+
+ggsave(
+  filename = "ed_plot.png",  # file name
+  plot = ed_plot,                     
+  width = 8,                                
+  height = 6,                              
+  dpi = 300                                
+)
 
 ```
