@@ -79,9 +79,25 @@ NOM_patients$time_to_event <- ifelse(
   NOM_patients$time_to_event
 )
 
+NOM_patients$status90 <- ifelse(
+  NOM_patients$time_to_event > 90, 
+  0, 
+  NOM_patients$status365
+)
+
+table(NOM_patients$status365) #43 urgent, 81 Urgent
+table(NOM_patients$status90) #28 elective, 53 urgent
+
 NOM_patients$any_appy <- ifelse(NOM_patients$status365 != 0, 1, 0)
 ```
+#Table of Baseline Indicators of NOM Subset
+```{r}
 
+
+
+
+
+```
 
 
 #Rates of Elective and Urgent appy after NOM by site
