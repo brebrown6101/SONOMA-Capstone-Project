@@ -5,32 +5,35 @@ date: "2026-01-25"
 ---
 ```{r}
 library(gt)
-
-
-
+library(lubridate)
+library(tidyverse)
+library(dplyr)
 ```
 
 #Data Set Up - Creating NOM patients only subset
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
 data_path = "C:/Bre/SONOMA/Sonoma_cleaned.csv"
 
-clean_s = read.csv(data_path, check.names = FALSE, row.names=1) 
+#data_path <- "sonoma_data/Sonoma_cleaned2.csv"
 
-#subsetting data to just NOM patients
-NOM_patients <- clean_s[clean_s$initial_planoutcomes == 2,] 
+clean_s <- read.csv(data_path, check.names = FALSE, row.names = 1)
 
-NOM_patients <- NOM_patients[!is.na(NOM_patients$time_of_dxoutcomes),] #removing NA values for date/time of patients dx of appendicitis
-#sum(is.na(NOM_patients$time_of_dxoutcomes)) #looking for NAs
-NOM_patients$time_of_dxoutcomes <- gsub(" .*","", NOM_patients$time_of_dxoutcomes) #removing time part of date/time
-#sum(is.na(NOM_patients$time_of_dxoutcomes)) #checking for NAs again
+# subsetting data to just NOM patients
+NOM_patients <- clean_s[clean_s$initial_planoutcomes == 2, ]
 
-#converting date_index to date object
+NOM_patients <- NOM_patients[!is.na(NOM_patients$time_of_dxoutcomes), ] # removing NA values for date/time of patients dx of appendicitis
+# sum(is.na(NOM_patients$time_of_dxoutcomes)) #looking for NAs
+
+NOM_patients$time_of_dxoutcomes <- gsub(" .*", "", NOM_patients$time_of_dxoutcomes) # removing time part of date/time
+# sum(is.na(NOM_patients$time_of_dxoutcomes)) #checking for NAs again
+
+# converting date_index to date object
 
 
 NOM_patients$time_of_dxoutcomes <- ymd(NOM_patients$time_of_dxoutcomes)
 
 
-#converting date of appendectomy after NOM to date object, converting blanks to NAs
+# converting date of appendectomy after NOM to date object, converting blanks to NAs
 NOM_patients$appy_int_dateoutcomes[
   NOM_patients$appy_int_dateoutcomes == ""
 ] <- NA
@@ -38,64 +41,84 @@ NOM_patients$appy_int_dateoutcomes[
 NOM_patients$appy_int_dateoutcomes <- ymd(NOM_patients$appy_int_dateoutcomes)
 
 
-#creating variable that is time in days from NOM decision to appy
+# creating variable that is time in days from NOM decision to appy
 NOM_patients$time_to_appy <- NOM_patients$appy_int_dateoutcomes - NOM_patients$time_of_dxoutcomes
-#I thought they were only followed for a year after, but many of these times look way past 365 days so what time for censored individuals?
+# I thought they were only followed for a year after, but many of these times look way past 365 days so what time for censored individuals?
 
-#DONT NEED THIS IF WE GET NEW TIMES FOR TWO ERRORS
-NOM_patients <- NOM_patients[NOM_patients$time_to_appy > 0 | is.na(NOM_patients$time_to_appy), ] #DONT NEED THIS IF WE GET NEW TIMES
+# DONT NEED THIS IF WE GET NEW TIMES FOR TWO ERRORS
+NOM_patients <- NOM_patients[NOM_patients$time_to_appy >= 0 | is.na(NOM_patients$time_to_appy), ]
+# DONT NEED THIS IF WE GET NEW TIMES
 
 
-#setting NA values to 0 for censored, creating status variable for survival
+# setting NA values to 0 for censored, creating status variable for survival
 NOM_patients$status <- ifelse(
   is.na(NOM_patients$interval_typeoutcomes),
-  0,   # censored
+  0, # censored
   NOM_patients$interval_typeoutcomes
 )
-
 
 
 NOM_patients$status <- as.numeric(NOM_patients$status)
 
 
-
-#creating time_to_event for all NOM patients, making it 365 for censored individuals
+# creating time_to_event for all NOM patients, making it 365 for censored individuals
 NOM_patients$time_to_event <- ifelse(
   is.na(NOM_patients$time_to_appy),
   365,
   NOM_patients$time_to_appy
 )
-#administratively censoring those beyond 1 year
+# administratively censoring those beyond 1 year
 NOM_patients$status365 <- ifelse(
-  NOM_patients$time_to_event > 365, 
-  0, #administratively censored beyond 1 year
+  NOM_patients$time_to_event > 365,
+  0, # administratively censored beyond 1 year
   NOM_patients$status
 )
 
-#changing time to event to 365 days for censored beyond 1 year individuals
+# changing time to event to 365 days for censored beyond 1 year individuals
 NOM_patients$time_to_event <- ifelse(
-  NOM_patients$status365 == 0, 
-  365, 
+  NOM_patients$status365 == 0,
+  365,
   NOM_patients$time_to_event
 )
 
 NOM_patients$status90 <- ifelse(
-  NOM_patients$time_to_event > 90, 
-  0, 
+  NOM_patients$time_to_event > 90,
+  0,
   NOM_patients$status365
 )
 
-table(NOM_patients$status365) #43 urgent, 81 Urgent
-table(NOM_patients$status90) #28 elective, 53 urgent
+table(NOM_patients$status365) # 43 urgent, 81 Urgent
+table(NOM_patients$status90) # 28 elective, 53 urgent
 
 NOM_patients$any_appy <- ifelse(NOM_patients$status365 != 0, 1, 0)
 ```
 #Table of Baseline Indicators of NOM Subset
 ```{r}
+library("table1")
 
 
 
+NOM4tab <- NOM_patients %>%
+rename('Age Category'= Age_Categories,
+'Race/Ethnicity' = RaceEthnicity,
+'English as a Second Language' = ESL,
+'Appendicolith' = appendicolithoutcomes,
+'Charlson Comorbidity Index' = ccioutcomes,
+'Appendix Diameter (mm)' = appy_sizeoutcomes,
+'WBC' = wbcoutcomes,
+'Neutrophil-Lymphocyte Ratio' = nlroutcomes,
+'Site' = sitesite_abstractor
+)
 
+NOM4tab$`Appendicolith` <- as.factor(NOM4tab$Appendicolith)
+NOM4tab$`English as a Second Language` <- as.factor(NOM4tab$`English as a Second Language`)
+NOM4tab$`Appendicolith` <- recode(NOM4tab$`Appendicolith`, `0` = "Absent", `1` = "Present")
+
+
+NOM4tab$`Neutrophil-Lymphocyte Ratio` <- as.numeric(NOM4tab$`Neutrophil-Lymphocyte Ratio`)
+NOM4tab$status365 <- factor(NOM4tab$status365, 0:2, c("None", "Elective", "Urgent/Emergent"))
+nom_table <- table1(~ `Age Category` + Sex + `Race/Ethnicity` + `English as a Second Language` + `Appendicolith` +  `Charlson Comorbidity Index` + `Appendix Diameter (mm)` + `WBC` + `Neutrophil-Lymphocyte Ratio` | status365, data = NOM4tab)
+nom_table
 
 ```
 
@@ -130,11 +153,8 @@ gt(site_counts) %>%
   )
 
 
-
-
-
-#relative percentages of elective, urgent, none for each site
-percentages <- PercTable(site_name ~ status365, data=NOM_patients, rfrq="010")
+# relative percentages of elective, urgent, none for each site
+percentages <- PercTable(site_name ~ status365, data = NOM_patients, rfrq = "010")
 percentages
 
 
@@ -187,6 +207,4 @@ ft <- flextable(percent_df) %>%
 
 # Save the flextable as a PNG image
 save_as_image(ft, path = "percent_table.png")
-
-
 ```
