@@ -2,7 +2,8 @@
 
 
 ```{r}
-data_path <- "/Users/johnchen/Desktop/2026_winter/597/sonoma_data/Sonoma_cleaned2.csv"
+#data_path <- "/Users/johnchen/Desktop/2026_winter/597/sonoma_data/Sonoma_cleaned2.csv"
+data_path = "C:/Bre/SONOMA/Sonoma_cleaned.csv"
 clean_s <- read.csv(data_path, check.names = FALSE, row.names = 1)
 colnames(clean_s)
 ```
@@ -145,6 +146,7 @@ na_summary
 
 
 ```{r}
+library(gtsummary)
 # NOM_patients$ageoutcomes
 
 
@@ -185,7 +187,7 @@ exp(cbind(OR = coef(fit_symptom_wbc), confint(fit_symptom_wbc)))
 nrow(dat_symptom_wbc)
 ```
 
-
+#### Model 2: Urgent appendectomy vs none
 ```{r}
 dat_urgent_src <- NOM_patients
 

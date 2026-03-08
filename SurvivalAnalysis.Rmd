@@ -26,6 +26,7 @@ clean_s = read.csv(data_path, check.names = FALSE, row.names=1)
 
 #subsetting data to just NOM patients
 NOM_patients <- clean_s[clean_s$initial_planoutcomes == 2,] 
+nrow(NOM_patients)
 
 NOM_patients <- NOM_patients[!is.na(NOM_patients$time_of_dxoutcomes),] #removing NA values for date/time of patients dx of appendicitis
 #sum(is.na(NOM_patients$time_of_dxoutcomes)) #looking for NAs
@@ -48,10 +49,9 @@ NOM_patients$appy_int_dateoutcomes <- ymd(NOM_patients$appy_int_dateoutcomes)
 
 #creating variable that is time in days from NOM decision to appy
 NOM_patients$time_to_appy <- NOM_patients$appy_int_dateoutcomes - NOM_patients$time_of_dxoutcomes
-#I thought they were only followed for a year after, but many of these times look way past 365 days so what time for censored individuals?
 
 #DONT NEED THIS IF WE GET NEW TIMES FOR TWO ERRORS
-NOM_patients <- NOM_patients[NOM_patients$time_to_appy > 0 | is.na(NOM_patients$time_to_appy), ] #DONT NEED THIS IF WE GET NEW TIMES
+NOM_patients <- NOM_patients[NOM_patients$time_to_appy >= 0 | is.na(NOM_patients$time_to_appy), ]
 
 
 #setting NA values to 0 for censored, creating status variable for survival
@@ -86,6 +86,8 @@ NOM_patients$time_to_event <- ifelse(
   365, 
   NOM_patients$time_to_event
 )
+
+table(NOM_patients$status365)
 
 # Urgent indicator
 NOM_patients$urgent_event <- ifelse(NOM_patients$status365 == 2, 1, 0)
