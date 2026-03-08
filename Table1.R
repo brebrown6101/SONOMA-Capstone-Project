@@ -2,11 +2,16 @@ library(dplyr)
 library(gtsummary)
 data_path <- "sonoma_data/Sonoma_cleaned2.csv"
 
+
+data_path <- "C:/Bre/SONOMA/Sonoma_cleaned.csv"
+
 clean_s <- read.csv(data_path, check.names = FALSE, row.names = 1)
 vars <- c(
     "Age_Categories", "Sex", "appendicolithoutcomes", "ccioutcomes",
-    "RaceEthnicity", "appy_sizeoutcomes", "bmi", "wbcoutcomes", "nlroutcomes"
+    "RaceEthnicity", "appy_sizeoutcomes", "wbcoutcomes", "nlroutcomes", "ESL"
 )
+
+table(clean_s$ESL)
 
 # ---- site process ----
 # Remove sites with 0 patients before factoring
@@ -51,10 +56,8 @@ clean_s$initial_planoutcomes <- factor(
     clean_s$initial_planoutcomes, 1:2,
     c("Appendectomy", "Antibiotics as Primary Treatment")
 )
-clean_s$appendicolithoutcomes <- factor(
-    clean_s$appendicolithoutcomes,
-    c(1, 0, 2), c("Yes", "No", "Not Mentioned")
-)
+clean_s$appendicolithoutcomes <- as.factor(clean_s$appendicolithoutcomes)
+clean_s$appendicolithoutcomes <- recode(clean_s$appendicolithoutcomes, `0` = "Absent", `1` = "Present")
 
 clean_s <- clean_s %>%
     mutate(
@@ -63,6 +66,32 @@ clean_s <- clean_s %>%
         nlroutcomes       = suppressWarnings(as.numeric(nlroutcomes))
     )
 
+
+## =========== Table1 Package table
+All4tab <- clean_s %>%
+  rename('Age Category'= Age_Categories,
+         'Race/Ethnicity' = RaceEthnicity,
+         'English as a Second Language' = ESL,
+         'Appendicolith' = appendicolithoutcomes,
+         'Charlson Comorbidity Index' = ccioutcomes,
+         'Appendix Diameter (mm)' = appy_sizeoutcomes,
+         'WBC' = wbcoutcomes,
+         'Neutrophil-Lymphocyte Ratio' = nlroutcomes,
+         'Site' = sitesite_abstractor,
+         'Initial Plan' = initial_planoutcomes
+         )
+
+All4tab$`English as a Second Language` <- as.factor(All4tab$`English as a Second Language`)
+All4tab <- drop_na(All4tab, 'Initial Plan')
+
+All4tab$`Neutrophil-Lymphocyte Ratio` <- as.numeric(All4tab$`Neutrophil-Lymphocyte Ratio`)
+
+all_table <- table1(~ `Age Category` + Sex + `Race/Ethnicity` + `English as a Second Language`+ `Appendicolith` +  `Charlson Comorbidity Index` + `Appendix Diameter (mm)` + `WBC` + `Neutrophil-Lymphocyte Ratio` | `Initial Plan`, data = All4tab)
+all_table
+
+
+
+## =========== tbl_summary table
 
 table1 <- clean_s %>%
     tbl_summary(
@@ -82,6 +111,7 @@ table1 <- clean_s %>%
             Age_Categories ~ "Age",
             Sex ~ "Sex",
             RaceEthnicity ~ "Race/Ethnicity",
+            ESL ~ "English as a Second Language",
             appendicolithoutcomes ~ "Appendicolith",
             ccioutcomes ~ "Charlson Comorbidity Index",
             appy_sizeoutcomes ~ "Appendix Diameter (mm)",
@@ -131,17 +161,17 @@ table(is.na(clean_s$appy_sizeoutcomes), clean_s$Age_Categories)
 
 
 ## =========== presentation style separate tables
-ibrary(dplyr)
+library(dplyr)
 library(gtsummary)
 
 label_map <- c(
     Age_Categories = "Age",
     Sex = "Sex",
     RaceEthnicity = "Race/Ethnicity",
+    ESL = "English as a Second Language",
     appendicolithoutcomes = "Appendicolith",
     ccioutcomes = "Charlson Comorbidity Index",
     appy_sizeoutcomes = "Appendix Diameter (mm)",
-    bmi = "BMI",
     wbcoutcomes = "WBC (10^9/L)",
     nlroutcomes = "Neutrophil-Lymphocyte Ratio",
     site_detailed = "Site"
@@ -183,6 +213,7 @@ clean_s <- clean_s %>%
         nlroutcomes       = suppressWarnings(as.numeric(nlroutcomes))
     )
 
-tbl_demo <- make_tbl(clean_s, c("Age_Categories", "Sex", "RaceEthnicity"), label_map)
-tbl_other <- make_tbl(clean_s, c("appendicolithoutcomes", "ccioutcomes", "appy_sizeoutcomes", "bmi", "wbcoutcomes", "nlroutcomes"), label_map)
+tbl_demo <- make_tbl(clean_s, c("Age_Categories", "Sex", "RaceEthnicity", "ESL"), label_map)
+tbl_other <- make_tbl(clean_s, c("appendicolithoutcomes", "ccioutcomes", "appy_sizeoutcomes", "wbcoutcomes", "nlroutcomes"), label_map)
 tbl_labs <- make_tbl(clean_s, c("site_detailed"), label_map)
+

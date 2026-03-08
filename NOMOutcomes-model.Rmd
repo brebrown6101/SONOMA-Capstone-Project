@@ -178,6 +178,8 @@ fit_symptom_wbc <- glm(
   family = binomial()
 )
 
+table_model1 <- tbl_regression(fit_symptom_wbc, exponentiate = TRUE)
+
 summary(fit_symptom_wbc)
 exp(cbind(OR = coef(fit_symptom_wbc), confint(fit_symptom_wbc)))
 nrow(dat_symptom_wbc)
@@ -223,6 +225,9 @@ fit_urgent_wbc <- glm(
   family = binomial()
 )
 table(dat_symptom_wbc$RaceEthnicity, dat_symptom_wbc$y_symptom)
+
+
+table_model2 <- tbl_regression(fit_urgent_wbc, exponentiate = TRUE)
 
 summary(fit_urgent_wbc)
 exp(cbind(OR = coef(fit_urgent_wbc), confint(fit_urgent_wbc)))
