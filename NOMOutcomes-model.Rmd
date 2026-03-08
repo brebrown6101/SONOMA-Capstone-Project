@@ -1,0 +1,402 @@
+
+
+
+```{r}
+data_path <- "/Users/johnchen/Desktop/2026_winter/597/sonoma_data/Sonoma_cleaned2.csv"
+clean_s <- read.csv(data_path, check.names = FALSE, row.names = 1)
+colnames(clean_s)
+```
+
+
+## subset to NOM
+```{r}
+NOM_patients <- clean_s[clean_s$initial_planoutcomes == 2, ]
+NOM_patients <- NOM_patients[!is.na(NOM_patients$time_of_dxoutcomes), ]
+```
+
+## additional cleaning (same as EDA)
+
+#### 1. status
+```{r}
+NOM_patients$status <- ifelse(
+  is.na(NOM_patients$interval_typeoutcomes),
+  0,
+  NOM_patients$interval_typeoutcomes
+)
+
+# Parse index date (strip time, then Date)
+NOM_patients$time_of_dxoutcomes <- gsub(" .*", "", NOM_patients$time_of_dxoutcomes)
+NOM_patients$time_of_dxoutcomes <- as.Date(NOM_patients$time_of_dxoutcomes, format = "%Y-%m-%d")
+
+# Parse appendectomy date (blank -> NA)
+NOM_patients$appy_int_dateoutcomes[NOM_patients$appy_int_dateoutcomes == ""] <- NA
+NOM_patients$appy_int_dateoutcomes <- as.Date(NOM_patients$appy_int_dateoutcomes, format = "%Y-%m-%d")
+
+# Time-to-appendectomy (days)
+NOM_patients$time_to_appy <- as.numeric(NOM_patients$appy_int_dateoutcomes - NOM_patients$time_of_dxoutcomes)
+
+# Administrative censoring beyond 365 days
+NOM_patients$status365 <- ifelse(
+  !is.na(NOM_patients$time_to_appy) & NOM_patients$time_to_appy > 365,
+  0,
+  NOM_patients$status
+)
+NOM_patients$status365 <- ifelse(is.na(NOM_patients$status365), 0, NOM_patients$status365)
+
+table(NOM_patients$status)
+table(NOM_patients$status365)
+```
+
+
+#### 2. outcome
+```{r}
+EARLY_CUTOFF_DAYS <- 30
+
+NOM_patients$outcome4 <- NA_character_
+NOM_patients$outcome4[NOM_patients$status365 == 0] <- "No follow up App. (Baseline)"
+NOM_patients$outcome4[NOM_patients$status365 == 1] <- "Elective App."
+
+# urgent split early vs late by time_to_appy
+is_urgent <- NOM_patients$status365 == 2
+NOM_patients$outcome4[is_urgent & !is.na(NOM_patients$time_to_appy) &
+  NOM_patients$time_to_appy <= EARLY_CUTOFF_DAYS] <- "Early and Urgent App."
+NOM_patients$outcome4[is_urgent & !is.na(NOM_patients$time_to_appy) &
+  NOM_patients$time_to_appy > EARLY_CUTOFF_DAYS] <- "Late and Urgent App."
+
+# Keep only rows where outcome4 is defined
+NOM_patients <- NOM_patients[!is.na(NOM_patients$outcome4), ]
+NOM_patients$outcome4 <- relevel(factor(NOM_patients$outcome4),
+  ref = "No follow up App. (Baseline)"
+)
+
+table(NOM_patients$outcome4)
+```
+
+
+
+#### 3. others
+```{r}
+# Race/Ethnicity collapse
+NOM_patients$RaceEthnicity <- ifelse(
+  NOM_patients$RaceEthnicity == "Multiracial",
+  "Other/Not Specified",
+  NOM_patients$RaceEthnicity
+)
+NOM_patients$RaceEthnicity <- factor(NOM_patients$RaceEthnicity)
+
+# Sex
+NOM_patients$Sex <- factor(NOM_patients$Sex)
+
+# ESL
+NOM_patients$ESL <- factor(NOM_patients$ESL)
+
+# CCI
+NOM_patients$ccioutcomes <- factor(NOM_patients$ccioutcomes)
+
+# Appendicolith
+NOM_patients$appendicolithoutcomes <- factor(NOM_patients$appendicolithoutcomes,
+  levels = c(0, 1),
+  labels = c("Not Present", "Present")
+)
+
+# Continuous predictors
+NOM_patients$ageoutcomes <- as.numeric(NOM_patients$ageoutcomes)
+NOM_patients$appy_sizeoutcomes <- as.numeric(NOM_patients$appy_sizeoutcomes)
+NOM_patients$wbcoutcomes <- as.numeric(NOM_patients$wbcoutcomes)
+
+# NLR had blanks in your EDA
+NOM_patients$nlroutcomes[NOM_patients$nlroutcomes == ""] <- NA
+NOM_patients$nlroutcomes <- as.numeric(NOM_patients$nlroutcomes)
+```
+
+quick check before model:
+```{r}
+test <- NOM_patients[, c(
+  "outcome4",
+  "ageoutcomes", "Sex", "RaceEthnicity", "ESL",
+  "ccioutcomes",
+  "appendicolithoutcomes",
+  "bmioutcomes",
+  "wbcoutcomes",
+  "appy_sizeoutcomes"
+)]
+nrow(test)
+na_n <- colSums(is.na(test))
+
+na_prop <- colMeans(is.na(test))
+
+na_summary <- data.frame(
+  column = names(na_n),
+  na_n = as.integer(na_n),
+  na_prop = na_prop
+)
+
+na_summary <- na_summary[order(-na_summary$na_n), ]
+na_summary
+```
+
+
+
+
+
+## Model
+
+#### Model 1: Symptom-driven appendectomy vs none
+
+
+```{r}
+# NOM_patients$ageoutcomes
+
+
+# outcome: use the NOM-specific variable
+NOM_patients$y_symptom <- as.integer(NOM_patients$symptom_driven_appy)
+
+dat_symptom_wbc <- NOM_patients[, c(
+  "y_symptom",
+  "ageoutcomes", "Age_Categories", "Sex", "RaceEthnicity", "ESL", # using continous age
+  "ccioutcomes",
+  "appendicolithoutcomes",
+  "bmioutcomes",
+  "wbcoutcomes"
+)]
+na_n <- colSums(is.na(dat_symptom_wbc))
+na_prop <- colMeans(is.na(dat_symptom_wbc))
+na_summary <- data.frame(
+  column = names(na_n),
+  na_n = as.integer(na_n),
+  na_prop = na_prop
+)
+na_summary <- na_summary[order(-na_summary$na_n), ]
+na_summary
+
+dat_symptom_wbc <- na.omit(dat_symptom_wbc)
+
+fit_symptom_wbc <- glm(
+  y_symptom ~ ageoutcomes + Sex + RaceEthnicity + ESL +
+    ccioutcomes + appendicolithoutcomes + wbcoutcomes,
+  data = dat_symptom_wbc,
+  family = binomial()
+)
+
+summary(fit_symptom_wbc)
+exp(cbind(OR = coef(fit_symptom_wbc), confint(fit_symptom_wbc)))
+nrow(dat_symptom_wbc)
+```
+
+
+```{r}
+dat_urgent_src <- NOM_patients
+
+
+# remove elective (interval_typeoutcomes == 1)
+dat_urgent_src <- dat_urgent_src[dat_urgent_src$status != 1, ]
+
+# urgent 1 vs none 0
+dat_urgent_src$y_urgent <- ifelse(dat_urgent_src$status == 2, 1, 0)
+
+dat_urgent_wbc <- dat_urgent_src[, c(
+  "y_urgent",
+  "ageoutcomes", "Age_Categories", "Sex", "RaceEthnicity", "ESL",
+  "ccioutcomes",
+  "appendicolithoutcomes",
+  "bmioutcomes",
+  "wbcoutcomes"
+)]
+
+na_n <- colSums(is.na(dat_urgent_wbc))
+na_prop <- colMeans(is.na(dat_urgent_wbc))
+na_summary <- data.frame(
+  column = names(na_n),
+  na_n = as.integer(na_n),
+  na_prop = na_prop
+)
+na_summary <- na_summary[order(-na_summary$na_n), ]
+na_summary
+
+
+dat_urgent_wbc <- na.omit(dat_urgent_wbc)
+
+fit_urgent_wbc <- glm(
+  y_urgent ~ ageoutcomes + Sex + RaceEthnicity + ESL +
+    ccioutcomes + appendicolithoutcomes + wbcoutcomes,
+  data = dat_urgent_wbc,
+  family = binomial()
+)
+table(dat_symptom_wbc$RaceEthnicity, dat_symptom_wbc$y_symptom)
+
+summary(fit_urgent_wbc)
+exp(cbind(OR = coef(fit_urgent_wbc), confint(fit_urgent_wbc)))
+nrow(dat_urgent_wbc)
+```
+
+```{r}
+library(broom)
+library(dplyr)
+library(ggplot2)
+
+# helper: make OR + 95% CI table from a glm
+or_df <- function(fit) {
+  broom::tidy(fit, conf.int = TRUE, exponentiate = TRUE) |>
+    filter(term != "(Intercept)")
+}
+
+# helper: nicer labels (edit if you want)
+clean_term <- function(x) {
+  x <- gsub("RaceEthnicity", "Race: ", x)
+  x <- gsub("SexMale", "Sex: Male", x)
+  x <- gsub("ESLYes", "ESL: Yes", x)
+  x <- gsub("appendicolithoutcomesPresent", "Appendicolith: Present", x)
+  x <- gsub("ccioutcomes", "CCI: ", x)
+  x <- gsub("Age_Categories", "Age", x)
+  x <- gsub("bmioutcomes", "BMI", x)
+  x <- gsub("wbcoutcomes", "WBC", x)
+  x
+}
+
+# helper: forest plot
+forest_plot <- function(fit, title_text) {
+  df <- or_df(fit) |>
+    mutate(
+      term = clean_term(term),
+      term = reorder(term, estimate) # order y by OR
+    )
+
+  ggplot(df, aes(x = estimate, y = term)) +
+    geom_vline(xintercept = 1, linetype = "dashed", color = "red") +
+    geom_point(color = "#0072B2") +
+    geom_errorbarh(aes(xmin = conf.low, xmax = conf.high),
+      height = 0.2, color = "#0072B2"
+    ) +
+    scale_x_log10() +
+    theme_bw() +
+    labs(
+      title = title_text,
+      x = "Adjusted Odds Ratio (log scale)",
+      y = NULL
+    )
+}
+
+# --- Two separate graphs ---
+p1 <- forest_plot(fit_symptom_wbc, "Model 1: Symptom-driven appendectomy vs none")
+p2 <- forest_plot(fit_urgent_wbc, "Model 2: Urgent appendectomy vs none (elective removed)")
+
+p1 +
+  coord_cartesian(xlim = c(0.1, 10)) +
+  scale_x_log10(breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10))
+
+p2 +
+  coord_cartesian(xlim = c(0.1, 10)) +
+  scale_x_log10(breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10))
+```
+
+
+```{r}
+# ---- Multiple testing correction (with package check) ----
+needed_pkgs <- c("broom", "dplyr", "ggplot2")
+to_install <- needed_pkgs[!vapply(needed_pkgs, requireNamespace, logical(1), quietly = TRUE)]
+if (length(to_install) > 0) install.packages(to_install)
+
+library(broom)
+library(dplyr)
+
+# Reuse clean_term() from above; define if not available
+if (!exists("clean_term")) {
+  clean_term <- function(x) {
+    x <- gsub("RaceEthnicity", "Race: ", x)
+    x <- gsub("SexMale", "Sex: Male", x)
+    x <- gsub("ESLYes", "ESL: Yes", x)
+    x <- gsub("appendicolithoutcomesPresent", "Appendicolith: Present", x)
+    x <- gsub("ccioutcomes", "CCI: ", x)
+    x <- gsub("Age_Categories", "Age", x)
+    x <- gsub("bmioutcomes", "BMI", x)
+    x <- gsub("wbcoutcomes", "WBC", x)
+    x
+  }
+}
+
+mt_results <- bind_rows(
+  broom::tidy(fit_symptom_wbc, conf.int = TRUE, exponentiate = TRUE) %>%
+    mutate(model = "Model 1: Symptom-driven vs none")
+) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(term_clean = clean_term(term)) %>%
+  group_by(model) %>%
+  mutate(
+    p_bonf_model = p.adjust(p.value, method = "bonferroni"),
+    p_fdr_model  = p.adjust(p.value, method = "BH")
+  ) %>%
+  ungroup() %>%
+  mutate(
+    p_bonf_global = p.adjust(p.value, method = "bonferroni"),
+    p_fdr_global  = p.adjust(p.value, method = "BH"),
+    sig_fdr_model = p_fdr_model < 0.05
+  )
+
+mt_results %>%
+  select(
+    model, term_clean, estimate, conf.low, conf.high,
+    p.value, p_bonf_model, p_fdr_model, p_bonf_global, p_fdr_global,
+    sig_fdr_model
+  ) %>%
+  arrange(model, p_fdr_model)
+```
+
+
+```{r}
+# ---- Revised forest plot (uses FDR-adjusted significance) ----
+library(ggplot2)
+
+plot_df <- mt_results %>%
+  mutate(
+    sig_label = ifelse(sig_fdr_model, "FDR < 0.05", "FDR >= 0.05"),
+    term_plot = reorder(term_clean, estimate)
+  )
+
+ggplot(plot_df, aes(x = estimate, y = term_plot, color = sig_label)) +
+  geom_vline(xintercept = 1, linetype = "dashed", color = "red") +
+  geom_point(size = 2) +
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2) +
+  coord_cartesian(xlim = c(0.1, 10)) +
+  scale_x_log10(breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10)) +
+  scale_color_manual(values = c("FDR < 0.05" = "#0072B2", "FDR >= 0.05" = "gray45")) +
+  theme_bw() +
+  labs(
+    title = "Model 1 revised forest plot with multiple-testing correction",
+    x = "Adjusted Odds Ratio (log scale)",
+    y = NULL,
+    color = "Significance"
+  )
+```
+
+
+```{r}
+# ---- Numerical comparison: raw vs multiple-testing adjusted (Model 1) ----
+num_compare <- mt_results %>%
+  transmute(
+    term = term_clean,
+    OR = estimate,
+    CI_low = conf.low,
+    CI_high = conf.high,
+    p_raw = p.value,
+    p_fdr = p_fdr_model,
+    p_bonf = p_bonf_model,
+    sig_raw_0.05 = p_raw < 0.05,
+    sig_fdr_0.05 = p_fdr < 0.05,
+    sig_bonf_0.05 = p_bonf < 0.05
+  ) %>%
+  arrange(p_fdr)
+
+num_compare
+
+sig_counts <- num_compare %>%
+  summarise(
+    n_terms = dplyr::n(),
+    n_sig_raw = sum(sig_raw_0.05),
+    n_sig_fdr = sum(sig_fdr_0.05),
+    n_sig_bonf = sum(sig_bonf_0.05)
+  )
+
+sig_counts
+```
+
+
