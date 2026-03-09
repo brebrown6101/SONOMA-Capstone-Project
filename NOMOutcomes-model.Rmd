@@ -91,7 +91,11 @@ NOM_patients$Sex <- factor(NOM_patients$Sex)
 NOM_patients$ESL <- factor(NOM_patients$ESL)
 
 # CCI
-NOM_patients$ccioutcomes <- factor(NOM_patients$ccioutcomes)
+NOM_patients$ccioutcomes <- factor(
+  NOM_patients$ccioutcomes,
+  levels = c("0", "1-3", ">3")
+)
+NOM_patients$ccioutcomes <- relevel(NOM_patients$ccioutcomes, ref = "0")
 
 # Appendicolith
 NOM_patients$appendicolithoutcomes <- factor(NOM_patients$appendicolithoutcomes,
@@ -229,7 +233,7 @@ exp(cbind(OR = coef(fit_urgent_wbc), confint(fit_urgent_wbc)))
 nrow(dat_urgent_wbc)
 ```
 
-```{r}
+```{r, fig.width=10, fig.height=3.2}
 library(broom)
 library(dplyr)
 library(ggplot2)
@@ -250,16 +254,43 @@ clean_term <- function(x) {
   x <- gsub("Age_Categories", "Age", x)
   x <- gsub("bmioutcomes", "BMI", x)
   x <- gsub("wbcoutcomes", "WBC", x)
+  x <- gsub("ageoutcomes", "Age", x)
   x
+}
+
+# helper: ordering key so Y-axis follows categories/subcategories
+term_order_key <- function(term) {
+  category <- dplyr::case_when(
+    grepl("^Age$", term) ~ "1_Age",
+    grepl("^Sex:", term) ~ "2_Sex",
+    grepl("^Race:", term) ~ "3_Race",
+    grepl("^ESL:", term) ~ "4_ESL",
+    grepl("^CCI:", term) ~ "5_CCI",
+    grepl("^Appendicolith:", term) ~ "6_Appendicolith",
+    grepl("^WBC$", term) ~ "7_WBC",
+    grepl("^BMI$", term) ~ "8_BMI",
+    TRUE ~ "9_Other"
+  )
+
+  subcat <- dplyr::case_when(
+    grepl("^CCI:", term) & grepl("1-3", term) ~ "01_1-3",
+    grepl("^CCI:", term) & grepl(">3", term) ~ "02_>3",
+    grepl("^Race:", term) ~ sub("^Race: ", "", term),
+    TRUE ~ term
+  )
+
+  paste(category, subcat, sep = "__")
 }
 
 # helper: forest plot
 forest_plot <- function(fit, title_text) {
   df <- or_df(fit) |>
     mutate(
-      term = clean_term(term),
-      term = reorder(term, estimate) # order y by OR
-    )
+      term = clean_term(term)
+    ) |>
+    arrange(term_order_key(term))
+
+  df$term <- factor(df$term, levels = rev(unique(df$term)))
 
   ggplot(df, aes(x = estimate, y = term)) +
     geom_vline(xintercept = 1, linetype = "dashed", color = "red") +
@@ -269,6 +300,10 @@ forest_plot <- function(fit, title_text) {
     ) +
     scale_x_log10() +
     theme_bw() +
+    theme(
+      axis.text.y = element_text(size = 14),
+      axis.text.x = element_text(size = 12)
+    ) +
     labs(
       title = title_text,
       x = "Adjusted Odds Ratio (log scale)",
@@ -277,8 +312,8 @@ forest_plot <- function(fit, title_text) {
 }
 
 # --- Two separate graphs ---
-p1 <- forest_plot(fit_symptom_wbc, "Model 1: Symptom-driven appendectomy vs none")
-p2 <- forest_plot(fit_urgent_wbc, "Model 2: Urgent appendectomy vs none (elective removed)")
+p1 <- forest_plot(fit_symptom_wbc, "Symptom-driven appendectomy vs none")
+p2 <- forest_plot(fit_urgent_wbc, "Urgent appendectomy vs none")
 
 p1 +
   coord_cartesian(xlim = c(0.1, 10)) +
@@ -287,6 +322,7 @@ p1 +
 p2 +
   coord_cartesian(xlim = c(0.1, 10)) +
   scale_x_log10(breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10))
+
 ```
 
 
@@ -310,6 +346,7 @@ if (!exists("clean_term")) {
     x <- gsub("Age_Categories", "Age", x)
     x <- gsub("bmioutcomes", "BMI", x)
     x <- gsub("wbcoutcomes", "WBC", x)
+    x <- gsub("ageoutcomes", "Age", x)
     x
   }
 }
@@ -347,9 +384,10 @@ mt_results %>%
 library(ggplot2)
 
 plot_df <- mt_results %>%
+  arrange(term_order_key(term_clean)) %>%
   mutate(
     sig_label = ifelse(sig_fdr_model, "FDR < 0.05", "FDR >= 0.05"),
-    term_plot = reorder(term_clean, estimate)
+    term_plot = factor(term_clean, levels = rev(unique(term_clean)))
   )
 
 ggplot(plot_df, aes(x = estimate, y = term_plot, color = sig_label)) +
@@ -360,6 +398,10 @@ ggplot(plot_df, aes(x = estimate, y = term_plot, color = sig_label)) +
   scale_x_log10(breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10)) +
   scale_color_manual(values = c("FDR < 0.05" = "#0072B2", "FDR >= 0.05" = "gray45")) +
   theme_bw() +
+  theme(
+    axis.text.y = element_text(size = 12),
+    axis.text.x = element_text(size = 11)
+  ) +
   labs(
     title = "Model 1 revised forest plot with multiple-testing correction",
     x = "Adjusted Odds Ratio (log scale)",
