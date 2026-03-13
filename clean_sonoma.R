@@ -7,11 +7,11 @@
 # Put your path to the SONOMA csv here 
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_raw.csv)
 #Bre: "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim0.csv"
-data_path = "//biostat-fs2-s/users/bbrown34/Desktop/SONOMA_Interim3.csv"
+data_path = ""
 # Put your path to where you want to save the cleaned data 
 #(e.g. //biostat-fs2-s/users/sherold/Documents/SONOMA-Data/sonoma_cleaned.csv)
 #Bre: "C:/Bre/SONOMA/Sonoma_cleaned.csv"
-output_path = "C:/Bre/SONOMA/Sonoma_cleaned.csv"
+output_path = ""
 
 
 
@@ -347,7 +347,7 @@ clean_s <- clean_s %>% mutate(plan = factor(initial_planoutcomes, levels = c(1, 
 
 
 clean_s <- clean_s %>%
-  rename(RecordID = ï..record_id) #when I download a new dataset, it switches record_id to this for some reason - 
+  rename(RecordID = record_id) #when I download a new dataset, it switches record_id to this for some reason - 
 #please comment out if it doesn't reply, and also change rename to correct record id indicator to make it easier to switch
 
 
