@@ -13,17 +13,15 @@ library(webshot2)
 
 # Load Start Dates
 ```{r}
-start_dates = read.csv("SONOMA-Data/TRIADPhase2_Site_Start_Date_V5_20231215.csv")
+start_dates = read.csv("SONOMA-Data/TRIADPhase2_Site_Start_Date_V5_20231215 copy.csv")
 start_dates = start_dates %>% select(-site_num)
 start_dates$start_date = as.POSIXct(start_dates$start_date)
-
-nrow(data[data$choice == "NOM",])
 ```
 
 
 # Load and clean data
 ```{r}
-data = read.csv("SONOMA-Data/sonoma_cleaned_2_20260202.csv")
+data = read.csv("SONOMA-Data/sonoma_cleaned_3_20260220.csv")
 
 data$firstdxoutcomes = as.POSIXct(data$firstdxoutcomes)
 data$initial_planoutcomes = data$initial_planoutcomes - 1
@@ -152,9 +150,9 @@ site_summary_wide <- site_summary_wide %>%
     "Events Post" = N_Post,
     "NOM Count Pre"= NOM_Count_Pre,
     "NOM Count Post" = NOM_Count_Post,
-    "NOM Rate Pre" = NOM_rate_Pre,
-    "NOM Rate Post" = NOM_rate_Post,
-    "Change in NOM Rate" = NOM_Rate_Diff
+    "NOM % Pre" = NOM_rate_Pre,
+    "NOM % Post" = NOM_rate_Post,
+    "Change in NOM %" = NOM_Rate_Diff
   )
                                    
 ```
@@ -177,31 +175,44 @@ ts_month = data %>%
   mutate(month = as.Date(floor_date(firstdxoutcomes, unit = "month"))) %>%
   group_by(site_name, month) %>%
   summarise(
+    dst = sum(decision_aidoutcomes, na.rm = TRUE),
     n_TOTAL = n(),
     n_NOM = sum(initial_planoutcomes == 1, na.rm = TRUE),
     n_SURGERY = sum(initial_planoutcomes == 0, na.rm = TRUE),
     NOM_rate = n_NOM/n_TOTAL,
     start_date = first(as.Date(start_date)),
   ) %>%
-  filter(month > as.Date("2022-12-01") & month < as.Date("2024-08-30"))%>% 
-                               mutate(month = month + 14)
+  filter(month > as.Date("2022-12-01") & month < as.Date("2024-08-30"))
 ```
 
 
 ```{r, fig.width=8, fig.height=6}
 rate_plot = ggplot(data = ts_month, 
        aes(x = month, y = NOM_rate, group = site_name)) + 
-  geom_point(size = 1,) + 
-  geom_line(size = .75, alpha = .6) +
+  geom_point(aes(, size = n_TOTAL) )+  
+  scale_size(range = c(.1, 4)) +
+  geom_line(size = .5, alpha = .6) +
   geom_vline(aes(xintercept = as.Date(start_date), color = "AppyOrNot"), size = .75) +
-  labs(color = "") +
+  labs(color = "", size = "Observations") +
   xlab("Date") +
-  ylab("Montly NOM Rate") + 
+  ylab("Montly NOM Proportion") + 
 
   facet_wrap(~site_name) +
-  theme_bw() +
-  labs(title = "Monthly NOM Rate Over Time") + 
+  theme_bw() +  
+  geom_text(
+    data = start_dates[start_dates$site_name %in% unique(data$site_name), ],
+    aes(
+      label = format(start_date, "%B %d %Y"),
+      x = as.Date(start_date) %m+% days(140), 
+      y = .8
+    ),
+    vjust = -0.6,
+    size = 3.2,
+    color = "red"
+  ) +
+  labs(title = "Monthly NOM Proportion by Site") + 
 scale_x_date(
+  limits = c(min(ts_month$month), max(ts_month$month)),
     breaks = 
       as.Date(c(
         "2023-4-01",
@@ -210,61 +221,60 @@ scale_x_date(
       ,
     labels = function(x) format(x, "%B %d %Y")  # e.g., "January 2020"
   ) + 
-  theme(strip.text = element_text(size = 7))
+  theme(strip.text = element_text(size = 7)) 
 
 
 
 
-ggsave("/home/users/sherold/Documents/SONOMA-figures/rate_plot.png", plot = rate_plot, width = 12, height = 6)
+ggsave("/home/users/sherold/Documents/SONOMA-figures/rate_plot_noCODA.png", plot = rate_plot, width = 12, height = 6)
 
 ```
+
+## coda non coda
+
+```{t}
+data %>%
+  mutate(month = as.Date(floor_date(firstdxoutcomes, unit = "month"))) %>%
+  group_by(site_name, month) %>%
+  summarise(
+    dst = sum(decision_aidoutcomes, na.rm = TRUE),
+    n_TOTAL = n(),
+    n_NOM = sum(initial_planoutcomes == 1, na.rm = TRUE),
+    n_SURGERY = sum(initial_planoutcomes == 0, na.rm = TRUE),
+    NOM_rate = n_NOM/n_TOTAL,
+    start_date = first(as.Date(start_date)),
+  ) %>%
+  filter(month > as.Date("2022-12-01") & month < as.Date("2024-08-30"))
 ```
 
-
-
-# Introduce Click Rate
 
 ```{r}
-clicks_raw = read.csv("SONOMA-Data/Site Tally(Clicks per month)_cleaned.csv")
-month_cols <- c("Oct.23","Nov.23","Dec.23","Jan.24","Feb.24","Mar.24",
-                "Apr.24","May.24","Jun.24","Jul.24","Aug.24","Sep.24", 
-                "Oct.24", "Nov.24", "Dec.24", "Jan.25", "Feb.25", "Mar.25")
-
-clicks = clicks_raw %>%
-  select(-c(Date.TTT.Completed.Site.Launch, Total, average.for.2024)) %>% 
-  mutate(across(all_of(month_cols), ~ as.numeric(.))) %>% 
-  pivot_longer(
-    cols = all_of(month_cols),
-    names_to = "month",
-    values_to = "clicks"
-  ) %>%
-  mutate(
-    month = as.Date(paste0("01-", month), format = "%d-%b.%y")
-  ) 
-
-ts_clicks = merge(x = ts_month, y = clicks, by = c("site_name", "month"), all.x = TRUE) %>% 
-    mutate(across(everything(), ~ replace_na(., 0)))
-
-ts_clicks = ts_clicks %>% mutate(post = case_when(month >= start_date ~ 1,
-                               month < start_date ~ 0))  %>% 
-                               mutate(month = month + 14)
-
-```
-```
-
-```{r, fig.width=8, fig.height=6}
-click_plot = ggplot(data = ts_clicks, 
-       aes(x = month, y = clicks, group = site_name)) + 
+ggplot(data = ts_clicks, 
+       aes(x = month, y = NOM_rate, group = site_name, size = dst)) + 
+       geom_point() + 
+       facet_wrap(~site_name)        + 
   geom_point(size = 1,) + 
   geom_line(size = .75, alpha = .6) +
   geom_vline(aes(xintercept = as.Date(start_date), color = "AppyOrNot"), size = .75) +
   labs(color = "") +
   xlab("Date") +
-  ylab("Monthly AppyOrNot Clicks") + 
+  ylab("Montly NOM Proportion") + 
 
   facet_wrap(~site_name) +
   theme_bw() +
-  labs(title = "Monthly AppyOrNot Clicks") + 
+  
+  geom_text(
+    data = start_dates[start_dates$site_name %in% unique(data$site_name), ],
+    aes(
+      label = format(start_date, "%B %d %Y"),
+      x = as.Date(start_date) %m+% days(140), 
+      y = .8
+    ),
+    vjust = -0.6,
+    size = 3.2,
+    color = "red"
+  ) +
+  labs(title = "Monthly NOM Proportion by Site") + 
 scale_x_date(
     breaks = 
       as.Date(c(
@@ -275,12 +285,8 @@ scale_x_date(
     labels = function(x) format(x, "%B %d %Y")  # e.g., "January 2020"
   ) + 
   theme(strip.text = element_text(size = 7))
-
-
-
-
-ggsave("/home/users/sherold/Documents/SONOMA-figures/click_plot.png", plot = click_plot, width = 12, height = 6)
 ```
+
 
 ```{r}
 click_nom_compare = ggplot(data = ts_clicks, aes(x = clicks, y = as.factor(n_NOM))) + 

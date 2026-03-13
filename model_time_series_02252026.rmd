@@ -1,0 +1,363 @@
+```{r}
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(knitr)
+library(tidyr)
+library(gtsummary)
+library(kableExtra)
+library(webshot2)
+library(sandwich)
+library(lmtest)
+library(emmeans)
+
+```
+
+# Monthly Binning
+```{r}
+sonoma = read.csv("SONOMA-Data/sonoma_cleaned_3_20260220.csv")
+#start_dates <- tribble(
+#  ~coda_site, ~start_date,
+#  "Atrium Health", as.Date("9/29/2023", "%m/%d/%Y"),
+#  "CODA", as.Date("9/29/2023", "%m/%d/%Y"),
+#  )
+
+start_dates <- tribble(
+  ~site_name, ~start_date,
+  "Atrium Health", as.Date("9/29/2023", "%m/%d/%Y"),
+  "Boston Medical Center",  as.Date("9/24/2023", "%m/%d/%Y"),
+  "Columbia University Medical Center",  as.Date("9/27/2023", "%m/%d/%Y"),
+  "University of Iowa Hospital and Clinics",  as.Date("9/9/2023", "%m/%d/%Y"),
+  "Grady Health System",  as.Date("11/17/2023", "%m/%d/%Y"),
+  "Michigan Medicine",  as.Date("10/30/2023", "%m/%d/%Y"),
+  "Harborview Medical Center",  as.Date("10/3/2023", "%m/%d/%Y"),
+  "University of Washington-Montlake",  as.Date("9/27/2023", "%m/%d/%Y"),
+  "Northwest Hospital-University of Washington",  as.Date("9/26/2023", "%m/%d/%Y"))
+#inclusion/exclusion---------------------
+#drop LBJ just for this analysis - incomplete data
+sonoma <- sonoma %>% filter(site_name != 'Lyndon B Johnson Hospital')
+
+#final inclusion
+sonoma <- sonoma %>% filter(eligiblefull == 1) 
+
+#factor creation---------------------
+sonoma <- sonoma %>% mutate(plan = factor(initial_planoutcomes, levels = c(1, 2), labels = c("Appendectomy", "NOM")))
+
+sonoma = sonoma %>% mutate(coda_site = case_when(
+                            site_name == "Atrium Health" ~ "Non-CODA",  site_name == "Grady Health System" ~ "Non-CODA", 
+                            TRUE ~ "CODA")) 
+
+
+#create monthly data per site-----------------------------
+sonoma <- sonoma %>% 
+  mutate(
+      firstdxoutcomes = as.Date(firstdxoutcomes)) %>%
+  filter(firstdxoutcomes >= "2023-01-01" & firstdxoutcomes <= "2024-08-01") %>% 
+  left_join(start_dates, by = "site_name") %>% 
+  mutate(
+    start_date = as.Date(start_date)) %>%  
+  mutate(period = case_when((firstdxoutcomes < start_date) ~ "Pre",
+                            (firstdxoutcomes >= start_date)  ~ "Post"),
+                    site_name = factor(site_name),
+                    plan_num = as.numeric((plan)) -1,
+  ) %>% 
+  select(c("site_name", "coda_site", "period", "plan", "plan_num","firstdxoutcomes")) %>% 
+  drop_na()
+
+sonoma$coda_site <- factor(sonoma$coda_site, 
+                                levels = c("CODA", setdiff(unique(sonoma$coda_site), "CODA")))
+sonoma$period <- factor(sonoma$period, 
+                                levels = c("Pre", setdiff(unique(sonoma$period), "Pre")))
+```
+
+```{r}
+coda_non_coda = sonoma %>%
+  mutate(month = as.Date(floor_date(firstdxoutcomes, unit = "month"))) %>%
+  group_by(coda_site, month) %>%
+  summarise(
+    p =  mean(plan == "NOM")
+  ) %>%
+  filter(month > as.Date("2022-12-01") & month < as.Date("2024-08-30"))
+```
+
+```{r}
+p = ggplot(data = coda_non_coda, aes(x = month, y = p, color = coda_site)) + 
+    geom_point() + geom_smooth() + 
+   scale_color_manual(values = c("CODA" = "#6e13a7",
+                                  "Non-CODA" = "#b8a016")) +
+    xlab("") + 
+    ylab("NOM Proportion") +
+    labs(title = "Smoothed Monthly NOM Proportion", color = "CODA Participation", linetype = "", size = "Observations")  + coord_cartesian(ylim = c(0, .35))
+
+ggsave("/home/users/sherold/Documents/SONOMA-figures/coda_non_coda.png", plot = p, width = 10, height = 6)
+```
+
+
+```{r}
+two_by_two <- sonoma %>%
+  group_by(coda_site, period) %>%
+  summarise(n = n(), p =  mean(plan == "NOM"), .groups = "drop") %>%
+  mutate(type = "Observed")
+
+two_by_two = rbind(
+  two_by_two,
+  data.frame(
+    coda_site = "Non-CODA",
+    period = "Pre",
+    n = 194,
+    p = 0.066,
+    type = "Counterfactual"
+  )
+)
+two_by_two = rbind(
+  two_by_two,
+  data.frame(
+    coda_site = "Non-CODA",
+    period = "Post",
+    n = 1,
+    p = 0.066 +  0.0208,
+    type = "Counterfactual"
+  )
+)
+two_by_two <- two_by_two %>%
+  mutate(
+    type = factor(type),
+    coda_site = factor(coda_site),
+    period = factor(period)
+  )
+two_by_two <- two_by_two %>%
+  mutate(group = c(1,1, 2,2, 3,3), group = factor(group)) %>%
+  mutate(
+    se = sqrt(( p * (1 -  p)) / n),
+    lower = max(0, p - 1.96 * se),
+    upper = min(1, p + 1.96 * se)
+  )
+head(sonoma)
+  ```
+
+```{r}
+two_by_two_plot = ggplot(data = two_by_two, aes(x = period, y = p, color = coda_site, group = group, linetype = type)) + 
+    geom_point(aes(, size = n)) + 
+    scale_size(range = c(.1, 6)) +
+    geom_line() +    
+    scale_linetype_manual(values = c("Observed" = "solid",
+                                  "Counterfactual" = "dotted")) +
+    scale_color_manual(values = c("CODA" = "#6e13a7",
+                                  "Non-CODA" = "#b8a016")) +
+    xlab("") + 
+    ylab("NOM Proportion") +
+    labs(title = "DiD 2x2", color = "CODA Participation", linetype = "", size = "Observations")  + ylim(0, .35)
+
+ggsave("/home/users/sherold/Documents/SONOMA-figures/two_by_two.png", plot = two_by_two_plot, width = 6, height = 6)
+
+```
+
+```{r}
+# Model 1 
+
+lm1 = glm(plan ~ period + coda_site + period*coda_site, 
+    data = sonoma, 
+    family=binomial(link = "identity"),
+    )
+summary(lm1)
+
+vc <- vcovCL(lm1, cluster =sonoma$site_name)
+coeftest(lm1, vcov = vc)
+coefci(lm1, vcov = vc)
+```
+
+
+```{R}
+# Model 2
+library(lme4)
+library(performance)
+m1 <- glmer(
+  plan ~ period * coda_site + (1 | site_name),
+  data = sonoma,
+  family = binomial(link = "logit")
+)
+summary(m1)
+exp(coef(summary(m1)))
+exp(confint(m1))
+icc(m1)
+
+##################################################
+
+m1 <- glmer(
+  plan ~ 1 + (1 | site_name),
+  data = sonoma,
+  family = binomial(link = "logistic")
+)
+summary(m1)
+icc(m1)
+vc <- VarCorr(m1)
+
+library(SUMMER)
+rates = (sonoma %>% group_by(site_name) %>% summarize(NOM_rate =  sum(plan == "NOM", na.rm = TRUE)/n()) %>% select(NOM_rate))
+sd(rates$NOM_rate)
+
+mean((sonoma %>% group_by(site_name) %>% summarize(v  =  sd(plan_num)))$v)
+
+.105 / (.409 + .105)
+```
+
+
+```{R}
+# Model 3
+library(geepack)
+library(performance)
+library(broom)
+
+g1 <- geeglm(
+  plan_num ~ period * coda_site,  
+  id = site_name,            
+  data = sonoma %>% arrange(site_name),
+  family = binomial(link = "logit"), 
+  corstr = "exchangeable")
+summary(g1)
+exp(coef(summary(g1)))
+exp(tidy(g1, conf.int = TRUE)[,2:7])
+```
+
+
+```{R}
+# Parallel Trends
+
+sonoma_pre = sonoma %>% filter(period == 'Pre') 
+sonoma_pre$day_num <- as.numeric(sonoma_pre$firstdxoutcomes)
+sonoma_pre$day_num = (sonoma_pre$day_num - mean(sonoma_pre$day_num))
+head(sonoma)
+
+# (1) 
+lm_pre = glm(plan ~ day_num*coda_site, 
+    data = sonoma_pre, 
+    family=binomial(link = "identity"),
+    )
+vc <- vcovCL(lm_pre, cluster =sonoma_pre$site_name)
+coeftest(lm_pre, vcov = vc)
+coefci(lm_pre, vcov = vc)
+
+# (2)
+m1_pre <- glmer(
+  plan ~ day_num*coda_site + (1 | site_name),
+  data = sonoma_pre,
+  family = binomial(link = "logit")
+)
+summary(m1_pre)
+exp(coef(summary(m1_pre)))
+exp(confint(m1_pre))
+icc(m1_pre)
+
+# (3)
+gee_pre = geeglm(
+  plan_num ~ day_num*coda_site,  
+  id = site_name,            
+  data = sonoma_pre %>% arrange(site_name),
+  family = binomial(link = "logit"), 
+  corstr = "exchangeable")
+
+summary(gee_pre)
+exp(coef(summary(gee_pre)))
+exp(tidy(gee_pre, conf.int = TRUE)[,2:7])
+
+lm_show = glm(plan ~ day_num*coda_site, 
+    data = sonoma_pre, 
+    family=binomial(link = "logit"),
+    )
+summary(lm_show)
+sonoma_pre$fitted = predict(lm_show, type = "response")
+
+(-0.000113 +  0.0004) * 100 *30
+```
+
+
+```{r}
+sonoma_pre_month = sonoma_pre %>%
+  mutate(month = as.Date(floor_date(firstdxoutcomes, unit = "month"))) %>%
+  group_by(month, site_name, coda_site) %>% 
+  summarize(NOM_rate =  sum(plan == "NOM", na.rm = TRUE)/n())
+
+p = ggplot(data =sonoma_pre_month, aes(x = month, group = site_name, color = coda_site)) + 
+geom_line(aes(y = NOM_rate), alpha = .25) + 
+geom_line(data = sonoma_pre, aes(x = firstdxoutcomes, y = fitted, group = site_name, color = coda_site), size = 1.5) +
+xlab("Pre Intervention Month") +
+ylab("NOM Proportion") +
+    scale_color_manual(values = c("CODA" = "#6e13a7",
+                                  "Non-CODA" = "#b8a016"))+ 
+labs(title = "Pre Intervention Trends", group = "", color = "CODA Participation")
+
+
+ggsave("/home/users/sherold/Documents/SONOMA-figures/parallel.png", plot = p, width = 10, height = 6)
+```
+
+```{R}
+# All Trends
+
+sonoma_clean = sonoma 
+sonoma_clean$day_num <- as.numeric(sonoma_clean$firstdxoutcomes)
+sonoma_clean$day_num = (sonoma_clean$day_num - mean(sonoma_clean$day_num))
+
+lm_all = glm(plan ~ period + coda_site + period*coda_site + day_num*coda_site,
+    data = sonoma_clean, 
+    family=binomial(link = "identity"),
+    )
+vc <- vcovCL(lm_all, cluster =sonoma_clean$site_name)
+coeftest(lm_all, vcov = vc)
+
+m1_all <- glmer(
+  plan ~ period + coda_site + period*coda_site + day_num*coda_site+ (1 | site_name),
+  data = sonoma_clean,
+  family = binomial(link = "logit")
+)
+summary(m1_all)
+
+
+gee_all = geeglm(
+  plan_num ~ period + coda_site + period*coda_site + day_num,  
+  id = site_name,            
+  data = sonoma_clean %>% arrange(site_name),
+  family = binomial(link = "logit"), 
+  corstr = "exchangeable")
+
+summary(gee_all)
+
+lm_show = glm(plan ~ period + coda_site + period*coda_site + day_num*coda_site, 
+    data = sonoma_clean , 
+    family=binomial(link = "logit"),
+    )
+summary(lm_show)
+sonoma_clean$fitted = predict(lm_show, type = "response")
+```
+
+
+```{r}
+
+
+sonoma_clean_month = sonoma_clean %>%
+  left_join(site_intercepts, by = "site_name") %>%
+  mutate(month = as.Date(floor_date(firstdxoutcomes, unit = "month"))) %>%
+  group_by(month, site_name, coda_site) %>% 
+  summarize(NOM_rate =  sum(plan == "NOM", na.rm = TRUE)/n(), fitted = fitted)
+
+
+p = ggplot(data =sonoma_clean_month, aes(x = month, group = site_name, color = coda_site)) + 
+geom_line(aes(y = NOM_rate), alpha = .25) + 
+geom_line(data = sonoma_clean %>% filter(period == "Pre"), aes(x = firstdxoutcomes, y = fitted, group = site_name, color = coda_site), size = 1.5) +
+geom_line(data = sonoma_clean %>% filter(period == "Post"), aes(x = firstdxoutcomes, y = fitted, group = site_name, color = coda_site), size = 1.5) +
+
+xlab("Month") +
+ylab("NOM Proportion") +
+    scale_color_manual(values = c("CODA" = "#6e13a7",
+                                  "Non-CODA" = "#b8a016"))+ 
+labs(title = "Pre/Post Intervention Trends", group = "", color = "CODA Participation")
+
+
+ggsave("/home/users/sherold/Documents/SONOMA-figures/DiD_with_time.png", plot = p, width = 10, height = 6)
+```
+
+
+
+
+
+
+
